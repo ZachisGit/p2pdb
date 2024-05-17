@@ -1,11 +1,11 @@
-use std::{collections::HashMap, error::Error, hash::{DefaultHasher, Hash}};
+use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
 
 use futures::StreamExt;
 use libp2p::{self, gossipsub, identify, rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, Multiaddr, Swarm};
 
 
 fn message_id_fn(message: &gossipsub::Message) -> gossipsub::MessageId {
-    let mut s = DefaultHasher::new();
+    let mut s = SipHasher::new();
     message.data.hash(&mut s);
     gossipsub::MessageId::from(std::hash::Hasher::finish(&s).to_string())
 }
@@ -58,9 +58,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
         let topic = gossipsub::IdentTopic::new(namespace.clone());
 
-        self.dial(rendezvous_address.clone()).unwrap();
 
-        let listener_address = format!("/ip4/0.0.0.0/tcp/0").parse().unwrap();
+        let listener_address = format!("/ip4/0.0.0.0/tcp/53748").parse::<Multiaddr>().unwrap();
+        self.add_external_address(listener_address.clone());
+        self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
 
         let mut cookie_cache = None;
@@ -91,7 +92,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             None,
                             None,
                             keypair.public().to_peer_id(),
-                        );                        
+                        );
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::RegisterFailed {
                         rendezvous_node,..
@@ -120,7 +121,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             None,
                             keypair.public().to_peer_id(),
                         );                        
-                    },                    
+                    },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Expired {
                         peer,..
                     })) => {

@@ -5,7 +5,7 @@ use std::str::FromStr;
 use libp2p::Multiaddr;
 use network::{setup_swarm, Spinup};
 
-const ROOT_DIR: &str = ".openrendezvous/";
+const  ROOT_DIR: &str = ".openrendezvous/";
 
 #[tokio::main]
 async fn main(){

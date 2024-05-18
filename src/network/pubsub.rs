@@ -80,6 +80,13 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             peer_id.clone(),
                             std::default::Default::default(),
                         ).unwrap();
+                        
+                        self.behaviour_mut().rendezvous.discover(
+                            Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
+                            None,
+                            None,
+                            peer_id.clone(),
+                        );
     
                         println!("ConnectionEstablished");
                     },
@@ -104,6 +111,14 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     })) => {
                         println!("RegisterFailed");
                         self._register_inc_failures(rendezvous_node.clone(), &mut registration_failures, &namespace);
+
+                        if let Some(failure) = registration_failures.get_mut(&rendezvous_node) 
+                        { 
+                            *failure = std::time::Instant::now(); 
+                        } else 
+                        { 
+                            registration_failures.insert(rendezvous_node.clone(), std::time::Instant::now());
+                        }
                         
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Discovered {
@@ -123,19 +138,12 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                         for registration in registrations {
                             for address in registration.record.addresses() {
-                                let peer = registration.record.peer_id();
+                                let peer = registration.record.peer_id().clone();
                                 
                                 println!("Discovered: {} - {}",peer.clone(), address.clone());
-                                /*
-                                let address_with_p2p =
-                                    if !address.ends_with(&Multiaddr::empty().with(p2p_suffix.clone())) {
-                                        address.clone().with(p2p_suffix)
-                                    } else {
-                                        address.clone()
-                                    };
-
-                                swarm.dial(address_with_p2p).unwrap();
-                                */
+                                
+                                self.dial(address.clone()).unwrap();
+                                
                             }
                         }
 
@@ -169,14 +177,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
     }
 
     fn _register_inc_failures(&mut self, peer: libp2p::PeerId, registration_failures: &mut std::collections::HashMap<libp2p::PeerId, std::time::Instant>, namespace: &str) {
-        if !registration_failures.contains_key(&peer) || registration_failures[&peer] < std::time::Instant::now() - std::time::Duration::from_secs(600){ 
-            if let Some(failure) = registration_failures.get_mut(&peer) 
-            { 
-                *failure = std::time::Instant::now(); 
-            } else 
-            { 
-                registration_failures.insert(peer.clone(), std::time::Instant::now());
-            }
+        if !registration_failures.contains_key(&peer) || registration_failures[&peer] < std::time::Instant::now() - std::time::Duration::from_secs(10){ 
+
             self.behaviour_mut().rendezvous.register(
                 rendezvous::Namespace::new(namespace.to_string()).unwrap(),
                 peer.clone(), 

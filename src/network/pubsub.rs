@@ -90,6 +90,9 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         if registration_failures.contains_key(&rendezvous_node) { 
                             registration_failures.remove(&rendezvous_node);
                         }
+
+                        println!("Registered to {}",rendezvous_node.clone());
+                        println!("Discovering {}",namespace.clone());
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             None,

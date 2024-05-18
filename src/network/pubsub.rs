@@ -1,7 +1,8 @@
 use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
 
 use futures::StreamExt;
-use libp2p::{self, gossipsub, identify, rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, Multiaddr, Swarm};
+use libp2p::{self, upnp, gossipsub, identify, relay,rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, Multiaddr, Swarm};
+
 
 
 fn message_id_fn(message: &gossipsub::Message) -> gossipsub::MessageId {
@@ -37,6 +38,8 @@ pub fn setup_swarm(
             rendezvous: libp2p::rendezvous::client::Behaviour::new(key.clone()),
             rendezvous_server: libp2p::rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
             pubsub: libp2p::gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Signed(key.clone()), gossipsub_config).unwrap(),
+            relay: relay::Behaviour::new(key.public().to_peer_id(), Default::default()),
+            upnp: upnp::tokio::Behaviour::default(),
         })?
         .with_swarm_config(|cfg| {
             cfg
@@ -118,7 +121,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             for address in registration.record.addresses() {
                                 let peer = registration.record.peer_id();
                                 
-                                println!("{}",peer.clone());
+                                println!("Discovered: {} - {}",peer.clone(), address.clone());
                                 /*
                                 let address_with_p2p =
                                     if !address.ends_with(&Multiaddr::empty().with(p2p_suffix.clone())) {
@@ -185,5 +188,7 @@ pub struct RendezvousGossipBehaviour {
     identify: identify::Behaviour,
     rendezvous: rendezvous::client::Behaviour,
     rendezvous_server: rendezvous::server::Behaviour,
-    pubsub: gossipsub::Behaviour
+    pubsub: gossipsub::Behaviour,
+    relay: relay::Behaviour,
+    upnp: upnp::tokio::Behaviour
 }

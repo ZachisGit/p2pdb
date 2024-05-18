@@ -60,7 +60,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
 
         let listener_address = format!("/ip4/0.0.0.0/tcp/53748").parse::<Multiaddr>().unwrap();
-        self.add_external_address(listener_address.clone());
+        self.add_external_address(rendezvous_address.clone());
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
 
@@ -71,7 +71,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         loop {
             tokio::select! {
                 event = self.select_next_some() => match event {
-                    SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } if endpoint.get_remote_address() == &rendezvous_address.clone() => {
+                    SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } => {
     
                         self.behaviour_mut().rendezvous.register(
                             rendezvous::Namespace::new(namespace.to_string()).unwrap(),

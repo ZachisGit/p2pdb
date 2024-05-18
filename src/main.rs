@@ -13,8 +13,6 @@ async fn main(){
     let cluster_keypair = network::get_cluster_keypair(ROOT_DIR).unwrap();
     let mut swarm = setup_swarm(node_keypair.clone()).unwrap();
     
-    
-
     swarm.spinup(
         format!("p2pdb-cluster-{}",cluster_keypair.public().to_peer_id()),
         node_keypair.clone(), 

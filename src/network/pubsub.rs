@@ -107,7 +107,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Discovered {
                         cookie, registrations,..
                     })) => {
-                        cookie_cache = Some(cookie.clone());
+
+                        println!("Discovered");
+                        cookie_cache.replace(cookie.clone());
+
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             cookie_cache.clone(),
@@ -115,7 +118,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             keypair.public().to_peer_id(),
                         );
 
-                        cookie_cache.replace(cookie.clone());
 
                         for registration in registrations {
                             for address in registration.record.addresses() {

@@ -64,7 +64,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
 
-        let mut cookie_cache = None;
+        let mut cookie_cache: Option<rendezvous::Cookie> = None;
 
         // Define a dict that maps a peer to its registration failure count
         let mut registration_failures: HashMap<libp2p::PeerId,std::time::Instant> = std::collections::HashMap::new();
@@ -102,7 +102,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Discovered {
-                        cookie,..
+                        cookie, registrations,..
                     })) => {
                         cookie_cache = Some(cookie.clone());
                         self.behaviour_mut().rendezvous.discover(
@@ -111,6 +111,27 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             None,
                             keypair.public().to_peer_id(),
                         );
+
+                        cookie_cache.replace(cookie.clone());
+
+                        for registration in registrations {
+                            for address in registration.record.addresses() {
+                                let peer = registration.record.peer_id();
+                                
+                                println!("{}",peer.clone());
+                                /*
+                                let address_with_p2p =
+                                    if !address.ends_with(&Multiaddr::empty().with(p2p_suffix.clone())) {
+                                        address.clone().with(p2p_suffix)
+                                    } else {
+                                        address.clone()
+                                    };
+
+                                swarm.dial(address_with_p2p).unwrap();
+                                */
+                            }
+                        }
+
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::DiscoverFailed {
                         ..

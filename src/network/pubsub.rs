@@ -26,7 +26,7 @@ pub fn setup_swarm(
     let swarm = libp2p::SwarmBuilder::with_existing_identity(node_keypair.clone())
         .with_tokio()
         .with_tcp(
-            libp2p::tcp::Config::default(),
+            libp2p::tcp::Config::new().port_reuse(true).nodelay(true),
             libp2p::noise::Config::new,
             libp2p::yamux::Config::default,
         )?
@@ -38,7 +38,6 @@ pub fn setup_swarm(
             rendezvous: libp2p::rendezvous::client::Behaviour::new(key.clone()),
             rendezvous_server: libp2p::rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
             pubsub: libp2p::gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Signed(key.clone()), gossipsub_config).unwrap(),
-            relay: relay::Behaviour::new(key.public().to_peer_id(), Default::default()),
             upnp: upnp::tokio::Behaviour::default(),
         })?
         .with_swarm_config(|cfg| {
@@ -97,7 +96,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             None,
                             None,
-                            keypair.public().to_peer_id(),
+                            rendezvous_node.clone(),
                         );
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::RegisterFailed {
@@ -194,6 +193,5 @@ pub struct RendezvousGossipBehaviour {
     rendezvous: rendezvous::client::Behaviour,
     rendezvous_server: rendezvous::server::Behaviour,
     pubsub: gossipsub::Behaviour,
-    relay: relay::Behaviour,
     upnp: upnp::tokio::Behaviour
 }

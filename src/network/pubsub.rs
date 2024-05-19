@@ -92,9 +92,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("Discovering {}",namespace.clone());
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::RegisterFailed {
-                        rendezvous_node,..
+                        rendezvous_node,error,..
                     })) => {
-                        println!("RegisterFailed {}",rendezvous_node.clone());
+                        println!("RegisterFailed {}; {:?}",rendezvous_node.clone(),error);
+
                         self._register_inc_failures(rendezvous_node.clone(), &mut registration_failures, &namespace);
 
                         if let Some(failure) = registration_failures.get_mut(&rendezvous_node) 
@@ -135,8 +136,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::DiscoverFailed {
-                        ..
+                        error,..
                     })) => {
+
+                        println("Discover failed: {:?}",error);
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             None,

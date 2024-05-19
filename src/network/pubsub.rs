@@ -61,7 +61,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         let topic = gossipsub::IdentTopic::new(namespace.clone());
 
 
-        let listener_address = format!("/ip4/0.0.0.0/tcp/53748").parse::<Multiaddr>().unwrap();
+        let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/53748").parse::<Multiaddr>().unwrap();
         self.add_external_address(rendezvous_address.clone());
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
@@ -74,20 +74,11 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
             tokio::select! {
                 event = self.select_next_some() => match event {
                     SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } => {
-    
-                        self.behaviour_mut().rendezvous.register(
-                            rendezvous::Namespace::new(namespace.to_string()).unwrap(),
-                            peer_id.clone(),
-                            std::default::Default::default(),
-                        ).unwrap();
+                       
+                        println!("{}",peer_id.clone());
                         
-                        self.behaviour_mut().rendezvous.discover(
-                            Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
-                            None,
-                            None,
-                            peer_id.clone(),
-                        );
-    
+
+                        //self.behaviour_mut().pubsub.publish(topic.clone(), b"First MSG").unwrap();
                         println!("ConnectionEstablished");
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Registered {
@@ -109,7 +100,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::RegisterFailed {
                         rendezvous_node,..
                     })) => {
-                        println!("RegisterFailed");
+                        println!("RegisterFailed {}",rendezvous_node.clone());
                         self._register_inc_failures(rendezvous_node.clone(), &mut registration_failures, &namespace);
 
                         if let Some(failure) = registration_failures.get_mut(&rendezvous_node) 
@@ -142,6 +133,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                 
                                 println!("Discovered: {} - {}",peer.clone(), address.clone());
                                 
+                                self.add_external_address(address.clone());
                                 self.dial(address.clone()).unwrap();
                                 
                             }
@@ -168,6 +160,24 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     })) => {
                         println!("{}", String::from_utf8_lossy(&message.data));
                         self.behaviour_mut().pubsub.publish(topic.clone(), b"I am Alive!").unwrap();
+                    },
+                    SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received {
+                        peer_id,..
+                    })) => {
+                        self.behaviour_mut().rendezvous.discover(
+                            Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
+                            None,
+                            None,
+                            peer_id.clone(),
+                        );
+
+
+                        //self._register_inc_failures(&);
+                        self.behaviour_mut().rendezvous.register(
+                            rendezvous::Namespace::new(namespace.to_string()).unwrap(),
+                            peer_id.clone(),
+                            std::default::Default::default(),
+                        ).unwrap();
                     }
                     _ => {}
                 }

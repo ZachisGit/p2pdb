@@ -36,7 +36,7 @@ pub fn setup_swarm(
                 key.clone().public(),
             )),
             rendezvous: libp2p::rendezvous::client::Behaviour::new(key.clone()),
-            rendezvous_server: libp2p::rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
+            //rendezvous_server: libp2p::rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
             pubsub: libp2p::gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Signed(key.clone()), gossipsub_config).unwrap(),
             upnp: upnp::tokio::Behaviour::default(),
         })?
@@ -212,7 +212,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 pub struct RendezvousGossipBehaviour {
     identify: identify::Behaviour,
     rendezvous: rendezvous::client::Behaviour,
-    rendezvous_server: rendezvous::server::Behaviour,
+    //rendezvous_server: rendezvous::server::Behaviour,
     pubsub: gossipsub::Behaviour,
     upnp: upnp::tokio::Behaviour
 }

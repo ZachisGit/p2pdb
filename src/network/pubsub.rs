@@ -139,7 +139,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         error,..
                     })) => {
 
-                        println("Discover failed: {:?}",error);
+                        println!("Discover failed: {:?}",error);
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             None,

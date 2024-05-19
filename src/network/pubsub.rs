@@ -90,12 +90,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                         println!("Registered to {}",rendezvous_node.clone());
                         println!("Discovering {}",namespace.clone());
-                        self.behaviour_mut().rendezvous.discover(
-                            Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
-                            None,
-                            None,
-                            rendezvous_node.clone(),
-                        );
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::RegisterFailed {
                         rendezvous_node,..
@@ -154,6 +148,13 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         peer,..
                     })) => {
                         self._register_inc_failures(peer.clone(), &mut registration_failures, &namespace);
+                        
+                        self.behaviour_mut().rendezvous.discover(
+                            Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
+                            cookie_cache.clone(),
+                            None,
+                            keypair.public().to_peer_id(),
+                        );
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Pubsub(libp2p::gossipsub::Event::Message {
                         message, ..

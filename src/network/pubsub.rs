@@ -140,16 +140,19 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     })) => {
 
                         println!("Discover failed: {:?}",error);
+                        
+                        /*
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
-                            None,
+                            cookie_cache.clone(),
                             None,
                             keypair.public().to_peer_id(),
-                        );                        
+                        );*/                        
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Expired {
                         peer,..
                     })) => {
+                        println!("Expired: {:?}",peer);
                         self._register_inc_failures(peer.clone(), &mut registration_failures, &namespace);
                         
                         self.behaviour_mut().rendezvous.discover(
@@ -183,7 +186,9 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             std::default::Default::default(),
                         ).unwrap();
                     }
-                    _ => {}
+                    others => {
+                        println!("OTHERS: {:?};",others);
+                    }
                 }
             }
         }

@@ -41,7 +41,7 @@ pub fn setup_swarm(
             upnp: upnp::tokio::Behaviour::default(),
         })?
         .with_swarm_config(|cfg| {
-            cfg
+            cfg.with_idle_connection_timeout(std::time::Duration::from_secs(365 * 24 * 60 * 60))
         })
         .build();
     Ok(swarm)
@@ -96,7 +96,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     })) => {
                         println!("RegisterFailed {}; {:?}",rendezvous_node.clone(),error);
 
-                        self._register_inc_failures(rendezvous_node.clone(), &mut registration_failures, &namespace);
+                        //self._register_inc_failures(rendezvous_node.clone(), &mut registration_failures, &namespace);
 
                         if let Some(failure) = registration_failures.get_mut(&rendezvous_node) 
                         { 
@@ -110,7 +110,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Discovered {
                         cookie, registrations,..
                     })) => {
-
                         println!("Discovered");
                         cookie_cache.replace(cookie.clone());
 
@@ -153,14 +152,14 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         peer,..
                     })) => {
                         println!("Expired: {:?}",peer);
-                        self._register_inc_failures(peer.clone(), &mut registration_failures, &namespace);
-                        
+                        //self._register_inc_failures(peer.clone(), &mut registration_failures, &namespace);
+                        /*
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             cookie_cache.clone(),
                             None,
                             keypair.public().to_peer_id(),
-                        );
+                        );*/
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Pubsub(libp2p::gossipsub::Event::Message {
                         message, ..
@@ -171,13 +170,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received {
                         peer_id,..
                     })) => {
-                        self.behaviour_mut().rendezvous.discover(
-                            Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
-                            None,
-                            None,
-                            peer_id.clone(),
-                        );
-
 
                         //self._register_inc_failures(&);
                         self.behaviour_mut().rendezvous.register(
@@ -185,6 +177,14 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             peer_id.clone(),
                             std::default::Default::default(),
                         ).unwrap();
+                        
+                        self.behaviour_mut().rendezvous.discover(
+                            Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
+                            None,
+                            None,
+                            peer_id.clone(),
+                        );
+
                     }
                     others => {
                         println!("OTHERS: {:?};",others);

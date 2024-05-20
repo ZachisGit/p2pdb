@@ -17,6 +17,6 @@ async fn main(){
         format!("p2pdb-cluster-"), // {}",cluster_keypair.public().to_peer_id()),
         node_keypair.clone(), 
         cluster_keypair.clone(), 
-        Multiaddr::from_str("/ip4/157.90.114.32/tcp/53748").unwrap()).await.unwrap();
+        Multiaddr::from_str("/ip4/157.90.114.32/tcp/53748/p2p/12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap()).await.unwrap();
 }
 

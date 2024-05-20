@@ -69,6 +69,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
 
         let mut cookie_cache: Option<rendezvous::Cookie> = None;
+        let mut cookies_cach: HashMap<libp2p::PeerId,Option<rendezvous::Cookie>> = std::collections::HashMap::new();
 
         // Define a dict that maps a peer to its registration failure count
         let mut registration_failures: HashMap<libp2p::PeerId,std::time::Instant> = std::collections::HashMap::new();
@@ -77,7 +78,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                 event = self.select_next_some() => match event {
                     SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } => {
                        
-                        println!("{}",peer_id.clone());
+                        println!("Connection established with: {}",peer_id.clone());
                         
 
                         //self.behaviour_mut().pubsub.publish(topic.clone(), b"First MSG").unwrap();
@@ -110,11 +111,18 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Discovered {
-                        cookie, registrations,..
+                        cookie, registrations,rendezvous_node,..
                     })) => {
+
+                        
+                        if registration_failures.contains_key(&rendezvous_node) { 
+                            registration_failures.remove(&rendezvous_node);
+                        }
+
                         println!("PubSub-Peers: {:?}", self.behaviour().pubsub.all_peers().collect::<Vec<_>>());
-                        println!("Discovered");
+                        println!("Discovered {:?}",rendezvous_node);
                         cookie_cache.replace(cookie.clone());
+                        
 
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
@@ -139,10 +147,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::DiscoverFailed {
-                        error,..
+                        error,rendezvous_node,..
                     })) => {
 
-                        println!("Discover failed: {:?}",error);
+                        println!("Discover failed: {:?}, {:?}",error,rendezvous_node);
                         
                         /*
                         self.behaviour_mut().rendezvous.discover(
@@ -179,9 +187,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received {
                         peer_id,..
-                    })) => {
+                    })) => if peer_id == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap() {
 
                         //self._register_inc_failures(&);
+                        println!("Identified {}",peer_id);
                         self.behaviour_mut().rendezvous.register(
                             rendezvous::Namespace::new(namespace.to_string()).unwrap(),
                             peer_id.clone(),
@@ -197,7 +206,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                     }
                     others => {
-                        println!("OTHERS: {:?};",others);
+                        //println!("OTHERS: {:?};",others);
                     }
                 }
             }

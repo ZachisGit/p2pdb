@@ -14,7 +14,7 @@ async fn main(){
     let mut swarm = setup_swarm(node_keypair.clone()).unwrap();
     
     swarm.spinup(
-        format!("p2pdb-cluster-{}",cluster_keypair.public().to_peer_id()),
+        format!("p2pdb-cluster-"), // {}",cluster_keypair.public().to_peer_id()),
         node_keypair.clone(), 
         cluster_keypair.clone(), 
         Multiaddr::from_str("/ip4/157.90.114.32/tcp/53748").unwrap()).await.unwrap();

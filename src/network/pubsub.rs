@@ -135,11 +135,21 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         for registration in registrations {
                             for address in registration.record.addresses() {
                                 let peer = registration.record.peer_id().clone();
+                                if peer.clone() == keypair.public().to_peer_id().clone() {
+                                    continue;
+                                }
                                 
                                 if discovered_peers.insert(address.clone()) {
-                                    println!("Discovered: {} - {}",peer.clone(), address.clone());
-                                    new_peer = true;
-                                    self.dial(address.clone()).unwrap();
+
+                                    //if peer.clone() == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWDkBFGbXVAGzX6Z3Wa94D9FHHJnotxzrEWJ6r7n8s6S8P").unwrap() {
+                                    //    new_peer = true;
+                                    //    println!("Special dial!");
+                                    //    self.dial(<Multiaddr as std::str::FromStr>::from_str("/ip4/65.109.14.113/tcp/53748/p2p/12D3KooWDkBFGbXVAGzX6Z3Wa94D9FHHJnotxzrEWJ6r7n8s6S8P").unwrap()).unwrap();
+                                    //} else {
+                                        println!("Discovered: {} - {}",peer.clone(), address.clone());
+                                        new_peer = true;
+                                        self.dial(address.clone()).unwrap();
+                                    //}
                                 }
                             }
                         }
@@ -214,7 +224,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                     }
                     others => {
-                        //println!("OTHERS: {:?};",others);
+                        println!("OTHERS: {:?};",others);
                     }
                 }
             }

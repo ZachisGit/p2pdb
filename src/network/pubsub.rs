@@ -123,12 +123,14 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         cookie_cache.replace(cookie.clone());
                         
 
+                        /*
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             cookie_cache.clone(),
                             None,
                             rendezvous_node.clone(),
                         );
+                        */
 
 
                         for registration in registrations {
@@ -201,7 +203,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
-                            None,
+                            cookie_cache.clone(),
                             None,
                             peer_id.clone(),
                         );

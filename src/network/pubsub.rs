@@ -61,7 +61,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         let topic = gossipsub::IdentTopic::new(namespace.clone());
 
 
-        let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/53748").parse::<Multiaddr>().unwrap();
+        let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap();
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
 

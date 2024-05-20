@@ -66,6 +66,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
 
+        self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
+
         let mut cookie_cache: Option<rendezvous::Cookie> = None;
 
         // Define a dict that maps a peer to its registration failure count
@@ -110,6 +112,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Discovered {
                         cookie, registrations,..
                     })) => {
+                        println!("PubSub-Peers: {:?}", self.behaviour().pubsub.all_peers().collect::<Vec<_>>());
                         println!("Discovered");
                         cookie_cache.replace(cookie.clone());
 
@@ -132,6 +135,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                 
                             }
                         }
+
 
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::DiscoverFailed {
@@ -164,8 +168,14 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Pubsub(libp2p::gossipsub::Event::Message {
                         message, ..
                     })) => {
-                        println!("{}", String::from_utf8_lossy(&message.data));
+                        println!("[PS] MSG: {}", String::from_utf8_lossy(&message.data));
                         self.behaviour_mut().pubsub.publish(topic.clone(), b"I am Alive!").unwrap();
+                    },
+                    SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Pubsub(libp2p::gossipsub::Event::Subscribed {
+                        ..
+                    })) => {
+                        println!("[PS] Sending first message {:?}", topic);
+                        self.behaviour_mut().pubsub.publish(topic.clone(), b"Hello World").unwrap();
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received {
                         peer_id,..

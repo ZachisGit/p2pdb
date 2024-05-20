@@ -65,7 +65,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
 
-        self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
 
         let mut cookie_cache: Option<rendezvous::Cookie> = None;
         let mut cookies_cach: HashMap<libp2p::PeerId,Option<rendezvous::Cookie>> = std::collections::HashMap::new();
@@ -78,6 +77,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } => {
                        
                         println!("Connection established with: {}",peer_id.clone());
+                        self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                         
 
                         //self.behaviour_mut().pubsub.publish(topic.clone(), b"First MSG").unwrap();

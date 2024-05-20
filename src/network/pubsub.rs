@@ -148,7 +148,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                     //} else {
                                         println!("Discovered: {} - {}",peer.clone(), address.clone());
                                         new_peer = true;
-                                        self.dial(address.clone()).unwrap();
+                                        self.add_external_address(address.clone());
+                                        //self.dial(address.clone()).unwrap();
                                     //}
                                 }
                             }

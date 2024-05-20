@@ -62,7 +62,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
 
         let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/53748").parse::<Multiaddr>().unwrap();
-        self.add_external_address(rendezvous_address.clone());
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
 
@@ -186,11 +185,14 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         self.behaviour_mut().pubsub.publish(topic.clone(), b"Hello World").unwrap();
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received {
-                        peer_id,..
+                        peer_id,info,..
                     })) => if peer_id == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap() {
 
+                        println!("{:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                        self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+
                         //self._register_inc_failures(&);
-                        println!("Identified {}",peer_id);
+                        println!("Identified {:?}",info.observed_addr);
                         self.behaviour_mut().rendezvous.register(
                             rendezvous::Namespace::new(namespace.to_string()).unwrap(),
                             peer_id.clone(),

@@ -67,7 +67,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
 
         let mut cookie_cache: Option<rendezvous::Cookie> = None;
-        let mut cookies_cach: HashMap<libp2p::PeerId,Option<rendezvous::Cookie>> = std::collections::HashMap::new();
+        let mut discovered_peers = std::collections::HashSet::new();
 
         // Define a dict that maps a peer to its registration failure count
         let mut registration_failures: HashMap<libp2p::PeerId,std::time::Instant> = std::collections::HashMap::new();
@@ -120,31 +120,35 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                         println!("PubSub-Peers: {:?}", self.behaviour().pubsub.all_peers().collect::<Vec<_>>());
                         println!("Discovered {:?}",rendezvous_node);
-                        cookie_cache.replace(cookie.clone());
-                        
 
-                        /*
+                        if cookie_cache == None {
+                            cookie_cache.replace(cookie.clone());
+                        }
+                        
+                        
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             cookie_cache.clone(),
                             None,
                             rendezvous_node.clone(),
                         );
-                        */
+                        
 
-
+                        let mut new_peer: bool = false;
                         for registration in registrations {
                             for address in registration.record.addresses() {
                                 let peer = registration.record.peer_id().clone();
                                 
-                                println!("Discovered: {} - {}",peer.clone(), address.clone());
-                                
-                                //self.add_external_address(address.clone());
-                                //self.dial(address.clone()).unwrap();
-                                
+                                if discovered_peers.insert(address.clone()) {
+                                    println!("Discovered: {} - {}",peer.clone(), address.clone());
+                                    new_peer = true;
+                                }
                             }
                         }
 
+                        if !new_peer {
+                            tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                        }
 
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::DiscoverFailed {

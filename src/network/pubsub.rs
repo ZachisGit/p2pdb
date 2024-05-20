@@ -77,7 +77,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } => {
                        
                         println!("Connection established with: {}",peer_id.clone());
-                        self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                         
 
                         //self.behaviour_mut().pubsub.publish(topic.clone(), b"First MSG").unwrap();
@@ -118,13 +117,11 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             registration_failures.remove(&rendezvous_node);
                         }
 
-                        println!("PubSub-Peers: {:?}", self.behaviour().pubsub.all_peers().collect::<Vec<_>>());
-                        println!("Discovered {:?}",rendezvous_node);
+                        println!("PubSub-Peers: {:?}", self.connected_peers().collect::<Vec<_>>());
 
                         if cookie_cache == None {
                             cookie_cache.replace(cookie.clone());
                         }
-                        
                         
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
@@ -142,6 +139,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                 if discovered_peers.insert(address.clone()) {
                                     println!("Discovered: {} - {}",peer.clone(), address.clone());
                                     new_peer = true;
+                                    self.dial(address.clone()).unwrap();
                                 }
                             }
                         }
@@ -211,6 +209,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             None,
                             peer_id.clone(),
                         );
+                        
+                        self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
 
                     }
                     others => {

@@ -127,7 +127,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             cookie_cache.clone(),
                             None,
-                            keypair.public().to_peer_id(),
+                            rendezvous_node.clone(),
                         );
 
 

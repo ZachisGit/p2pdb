@@ -117,7 +117,12 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             registration_failures.remove(&rendezvous_node);
                         }
 
-                        println!("PubSub-Peers: {:?}", self.connected_peers().collect::<Vec<_>>());
+                        println!("Peers:");
+                        for peer in self.connected_peers() {
+                            print!("{:?}, ",peer.clone())
+                        }
+                        println!("");
+
 
                         if cookie_cache == None {
                             cookie_cache.replace(cookie.clone());
@@ -149,7 +154,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                         println!("Discovered: {} - {}",peer.clone(), address.clone());
                                         new_peer = true;
                                         self.add_external_address(address.clone());
-                                        //self.dial(address.clone()).unwrap();
+                                        self.add_peer_address(peer.clone(), address.clone());
+                                        self.behaviour_mut().pubsub.add_explicit_peer(&peer);
                                     //}
                                 }
                             }

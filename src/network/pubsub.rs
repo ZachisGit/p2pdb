@@ -140,28 +140,31 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                         let mut new_peer: bool = false;
                         for registration in registrations {
-                            for address in registration.record.addresses() {
-                                let peer = registration.record.peer_id().clone();
-                                if peer.clone() == keypair.public().to_peer_id().clone() {
-                                    continue;
-                                }
-                                
-                                if discovered_peers.insert(peer.clone()) {
+                            let address = registration.record.addresses().first().unwrap().clone();
+                            
+                            let peer = registration.record.peer_id().clone();
+                            if peer.clone() == keypair.public().to_peer_id().clone() {
+                                continue;
+                            }
+                            
+                            if discovered_peers.insert(peer.clone()) {
 
-                                    //if peer.clone() == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWDkBFGbXVAGzX6Z3Wa94D9FHHJnotxzrEWJ6r7n8s6S8P").unwrap() {
-                                    //    new_peer = true;
-                                    //    println!("Special dial!");
-                                    //    self.dial(<Multiaddr as std::str::FromStr>::from_str("/ip4/65.109.14.113/tcp/53748/p2p/12D3KooWDkBFGbXVAGzX6Z3Wa94D9FHHJnotxzrEWJ6r7n8s6S8P").unwrap()).unwrap();
-                                    //} else {
-                                        println!("Discovered: {} - {}",peer.clone(), address.clone());
-                                        new_peer = true;
+                                //if peer.clone() == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWDkBFGbXVAGzX6Z3Wa94D9FHHJnotxzrEWJ6r7n8s6S8P").unwrap() {
+                                //    new_peer = true;
+                                //    println!("Special dial!");
+                                //    self.dial(<Multiaddr as std::str::FromStr>::from_str("/ip4/65.109.14.113/tcp/53748/p2p/12D3KooWDkBFGbXVAGzX6Z3Wa94D9FHHJnotxzrEWJ6r7n8s6S8P").unwrap()).unwrap();
+                                //} else {
+                                    println!("Discovered: {} - {}",peer.clone(), address.clone());
+                                    new_peer = true;
+                                    self.dial(address).unwrap();
 
-                                        
-                                        //address_split = address.to_string().unwrap().
 
-                                        //self.add_external_address(address.clone());
-                                    //}
-                                }
+
+                                    
+                                    //address_split = address.to_string().unwrap().
+
+                                    //self.add_external_address(address.clone());
+                                //}
                             }
                         }
 
@@ -217,13 +220,23 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         if peer_id != <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(){
                             println!("{:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
                             self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
-                            self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
+                            //self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                             self.behaviour_mut().pubsub.publish(topic.clone(), "test").unwrap();
                             println!("Identified different peer_id then rendezvous: {:?}",peer_id.clone());
                             
                         } else {
-                            println!("{:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,peer_id.clone())).unwrap());
-                            self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,peer_id.clone())).unwrap());
+                            self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
                             self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                             let _ = self.behaviour_mut().pubsub.publish(topic.clone(), "test");
 

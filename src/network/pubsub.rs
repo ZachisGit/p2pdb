@@ -231,6 +231,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                             let _ = self.behaviour_mut().pubsub.publish(topic.clone(), "test");
 
+                            let _ = self.listen_on(info.observed_addr.clone());
+
                             //self._register_inc_failures(&);
                             println!("Identified {:?}",info.observed_addr);
                             self.behaviour_mut().rendezvous.register(

@@ -87,9 +87,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         //self.behaviour_mut().pubsub.publish(topic.clone(), b"First MSG").unwrap();
                         println!("ConnectionEstablished");
                     },
-                    SwarmEvent::IncomingConnectionError { send_back_addr,.. } => {
-                        self.dial(send_back_addr.clone()).unwrap();
-                    },
                     SwarmEvent::OutgoingConnectionError { .. } => {
                         //self.dial(send_back_addr.clone()).unwrap();
                     },
@@ -209,7 +206,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         peer,..
                     })) => {
                         println!("Expired: {:?}",peer);
-                        if peer.clone() != <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(){
+                        if peer.clone() == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(){
                             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
                             self.dial(rendezvous_address.clone()).unwrap();
                         }

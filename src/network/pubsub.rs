@@ -176,7 +176,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         }
 
                         if !new_peer {
-                            tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                         }
 
                     },
@@ -211,13 +211,13 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         message, ..
                     })) => {
                         println!("[PS] MSG: {}", String::from_utf8_lossy(&message.data));
-                        self.behaviour_mut().pubsub.publish(topic.clone(), b"I am Alive!").unwrap();
+                        //self.behaviour_mut().pubsub.publish(topic.clone(), b"I am Alive!").unwrap();
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Pubsub(libp2p::gossipsub::Event::Subscribed {
                         ..
                     })) => {
                         println!("[PS] Sending first message {:?}", topic);
-                        self.behaviour_mut().pubsub.publish(topic.clone(), b"Hello World").unwrap();
+                        //self.behaviour_mut().pubsub.publish(topic.clone(), b"Hello World").unwrap();
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received {
                         peer_id,info,..
@@ -230,7 +230,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             //self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                             println!("[WELCOME] Identified new peer_id then rendezvous: {:?}",peer_id.clone());
                             if is_pub_listener_address_set {
-                                self.behaviour_mut().pubsub.publish(topic.clone(), "Welcome new guy!").unwrap();
+                                //self.behaviour_mut().pubsub.publish(topic.clone(), "Welcome new guy!").unwrap();
                             }
                             
                         } else {

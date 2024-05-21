@@ -219,24 +219,15 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("MyPeerId: {:?}; Identified PeerId: {:?}",keypair.public().to_peer_id().clone(),peer_id.clone());
                         if peer_id != <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(){
                             println!("{:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
-                            self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            //self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            self.add_external_address(info.observed_addr.clone());
                             //self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                             self.behaviour_mut().pubsub.publish(topic.clone(), "test").unwrap();
                             println!("Identified different peer_id then rendezvous: {:?}",peer_id.clone());
                             
                         } else {
                             self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
-                            self.add_external_address(format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap());
+                            self.add_external_address(info.observed_addr.clone());
                             self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                             let _ = self.behaviour_mut().pubsub.publish(topic.clone(), "test");
 

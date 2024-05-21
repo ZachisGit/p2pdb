@@ -51,7 +51,10 @@ pub fn setup_swarm(
 // Define and implement a trait for Swarm<RendezvousGossipBehaviour>
 pub trait Spinup {
     fn _register_inc_failures(&mut self, peer: libp2p::PeerId, registration_failures: &mut std::collections::HashMap<libp2p::PeerId, std::time::Instant>,namespace: &str);
+    fn _extract_base_multiaddr(addr: &Multiaddr) -> Multiaddr;
+    
     async fn spinup(&mut self, namespace: String, keypair: libp2p::identity::Keypair, cluster_keypair: libp2p::identity::Keypair, rendezvous_address: Multiaddr) -> Result<(), Box<dyn Error>>;
+
 }
 
 
@@ -142,7 +145,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                     continue;
                                 }
                                 
-                                if discovered_peers.insert(address.clone()) {
+                                if discovered_peers.insert(peer.clone()) {
 
                                     //if peer.clone() == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWDkBFGbXVAGzX6Z3Wa94D9FHHJnotxzrEWJ6r7n8s6S8P").unwrap() {
                                     //    new_peer = true;
@@ -151,8 +154,12 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                     //} else {
                                         println!("Discovered: {} - {}",peer.clone(), address.clone());
                                         new_peer = true;
-                                        self.add_external_address(address.clone());
-                                        self.add_peer_address(peer.clone(), address.clone());
+
+                                        
+                                        //address_split = address.to_string().unwrap().
+
+                                        //self.add_external_address(address.clone());
+                                        self.add_peer_address(peer.clone(), Self::_extract_base_multiaddr(&address));
                                         self.behaviour_mut().pubsub.add_explicit_peer(&peer);
                                     //}
                                 }
@@ -226,6 +233,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         );
                         
                         self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
+                        self.behaviour_mut().pubsub.publish(topic.clone(), "test");
 
                     }
                     others => {
@@ -246,6 +254,17 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                 std::default::Default::default(),
             ).unwrap();
         }
+    }
+
+    fn _extract_base_multiaddr(addr: &Multiaddr) -> Multiaddr {
+        let mut base_addr = Multiaddr::empty();
+        for protocol in addr.iter() {
+            if protocol == libp2p::multiaddr::Protocol::P2p(libp2p::PeerId::random().into()) {
+                break;
+            }
+            base_addr.push(protocol);
+        }
+        base_addr
     }
 }
 

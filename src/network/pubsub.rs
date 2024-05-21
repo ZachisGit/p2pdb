@@ -67,6 +67,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap();
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
+        
 
 
         let mut cookie_cache: Option<rendezvous::Cookie> = None;
@@ -159,8 +160,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                         //address_split = address.to_string().unwrap().
 
                                         //self.add_external_address(address.clone());
-                                        self.add_peer_address(peer.clone(), Self::_extract_base_multiaddr(&address));
-                                        self.behaviour_mut().pubsub.add_explicit_peer(&peer);
                                     //}
                                 }
                             }
@@ -212,28 +211,39 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received {
                         peer_id,info,..
-                    })) => if peer_id == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap() {
+                    })) => if peer_id != keypair.public().to_peer_id().clone() {
 
-                        println!("{:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
-                        self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                        println!("MyPeerId: {:?}; Identified PeerId: {:?}",keypair.public().to_peer_id().clone(),peer_id.clone());
+                        if peer_id != <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(){
+                            println!("{:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
+                            self.behaviour_mut().pubsub.publish(topic.clone(), "test").unwrap();
+                            println!("Identified different peer_id then rendezvous: {:?}",peer_id.clone());
+                            
+                        } else {
+                            println!("{:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,peer_id.clone())).unwrap());
+                            self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,peer_id.clone())).unwrap());
+                            self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
+                            let _ = self.behaviour_mut().pubsub.publish(topic.clone(), "test");
 
-                        //self._register_inc_failures(&);
-                        println!("Identified {:?}",info.observed_addr);
-                        self.behaviour_mut().rendezvous.register(
-                            rendezvous::Namespace::new(namespace.to_string()).unwrap(),
-                            peer_id.clone(),
-                            std::default::Default::default(),
-                        ).unwrap();
-                        
-                        self.behaviour_mut().rendezvous.discover(
-                            Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
-                            cookie_cache.clone(),
-                            None,
-                            peer_id.clone(),
-                        );
-                        
-                        self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
-                        self.behaviour_mut().pubsub.publish(topic.clone(), "test");
+                            //self._register_inc_failures(&);
+                            println!("Identified {:?}",info.observed_addr);
+                            self.behaviour_mut().rendezvous.register(
+                                rendezvous::Namespace::new(namespace.to_string()).unwrap(),
+                                peer_id.clone(),
+                                std::default::Default::default(),
+                            ).unwrap();
+                            
+                            self.behaviour_mut().rendezvous.discover(
+                                Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
+                                cookie_cache.clone(),
+                                None,
+                                peer_id.clone(),
+                            );
+                            
+                            self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
+                        }
 
                     }
                     others => {

@@ -124,9 +124,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("");
 
 
-                        if cookie_cache == None {
-                            cookie_cache.replace(cookie.clone());
-                        }
+                        cookie_cache.replace(cookie.clone());
                         
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),

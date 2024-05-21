@@ -67,6 +67,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap();
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
+        let mut is_pub_listener_address_set: bool = false;
         
 
 
@@ -78,13 +79,19 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         loop {
             tokio::select! {
                 event = self.select_next_some() => match event {
-                    SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } => {
+                    SwarmEvent::ConnectionEstablished { peer_id,.. } => {
                        
                         println!("Connection established with: {}",peer_id.clone());
                         
 
                         //self.behaviour_mut().pubsub.publish(topic.clone(), b"First MSG").unwrap();
                         println!("ConnectionEstablished");
+                    },
+                    SwarmEvent::IncomingConnectionError { send_back_addr,.. } => {
+                        self.dial(send_back_addr.clone()).unwrap();
+                    },
+                    SwarmEvent::OutgoingConnectionError { .. } => {
+                        //self.dial(send_back_addr.clone()).unwrap();
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Registered {
                         rendezvous_node,..
@@ -121,9 +128,9 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             registration_failures.remove(&rendezvous_node);
                         }
 
-                        println!("Peers:");
+                        println!("[Peers]:");
                         for peer in self.connected_peers() {
-                            print!("{:?}, ",peer.clone())
+                            println!("- {:?}",peer.clone())
                         }
                         println!("");
 
@@ -218,15 +225,23 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                         println!("MyPeerId: {:?}; Identified PeerId: {:?}",keypair.public().to_peer_id().clone(),peer_id.clone());
                         if peer_id != <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(){
-                            println!("{:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
-                            //self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            println!("[NEW-EXT-ADDR]: {:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
                             //self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
-                            println!("Identified different peer_id then rendezvous: {:?}",peer_id.clone());
+                            println!("[WELCOME] Identified new peer_id then rendezvous: {:?}",peer_id.clone());
+                            if is_pub_listener_address_set {
+                                self.behaviour_mut().pubsub.publish(topic.clone(), "Welcome new guy!").unwrap();
+                            }
                             
                         } else {
                             self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
-                            self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
-                            let _ = self.listen_on(info.observed_addr.clone());
+
+                            
+                            if !is_pub_listener_address_set {
+                                let _ = self.listen_on(info.observed_addr.clone());
+                                is_pub_listener_address_set = true;
+                                self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
+                            }
 
                             //self._register_inc_failures(&);
                             println!("Identified {:?}",info.observed_addr);

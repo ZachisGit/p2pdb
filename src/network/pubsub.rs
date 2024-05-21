@@ -107,7 +107,15 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         rendezvous_node,error,..
                     })) => {
                         println!("RegisterFailed {}; {:?}",rendezvous_node.clone(),error);
+                        
+                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                        self.behaviour_mut().rendezvous.register(
+                            rendezvous::Namespace::new(namespace.to_string()).unwrap(),
+                            rendezvous_node.clone(),
+                            std::default::Default::default(),
+                        ).unwrap();
 
+                        /*
                         //self._register_inc_failures(rendezvous_node.clone(), &mut registration_failures, &namespace);
 
                         if let Some(failure) = registration_failures.get_mut(&rendezvous_node) 
@@ -117,6 +125,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         { 
                             registration_failures.insert(rendezvous_node.clone(), std::time::Instant::now());
                         }
+                        */
                         
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Discovered {
@@ -186,18 +195,24 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                         println!("Discover failed: {:?}, {:?}",error,rendezvous_node);
                         
-                        /*
+                        
+                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                        
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             cookie_cache.clone(),
                             None,
                             keypair.public().to_peer_id(),
-                        );*/                        
+                        );                        
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Expired {
                         peer,..
                     })) => {
                         println!("Expired: {:?}",peer);
+                        if peer.clone() != <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(){
+                            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                            self.dial(rendezvous_address.clone()).unwrap();
+                        }
                         //self._register_inc_failures(peer.clone(), &mut registration_failures, &namespace);
                         /*
                         self.behaviour_mut().rendezvous.discover(

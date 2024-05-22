@@ -2,6 +2,7 @@ use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
 
 use futures::StreamExt;
 use libp2p::{self, upnp, gossipsub, identify, relay,rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, Multiaddr, Swarm};
+use tokio::time::sleep;
 
 
 
@@ -52,7 +53,8 @@ pub fn setup_swarm(
 pub trait Spinup {
     fn _register_inc_failures(&mut self, peer: libp2p::PeerId, registration_failures: &mut std::collections::HashMap<libp2p::PeerId, std::time::Instant>,namespace: &str);
     fn _extract_base_multiaddr(addr: &Multiaddr) -> Multiaddr;
-    
+    fn _extract_peer_id(addr: &Multiaddr) -> Option<libp2p::PeerId>;
+
     async fn spinup(&mut self, namespace: String, keypair: libp2p::identity::Keypair, cluster_keypair: libp2p::identity::Keypair, rendezvous_address: Multiaddr) -> Result<(), Box<dyn Error>>;
 
 }
@@ -87,8 +89,21 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         //self.behaviour_mut().pubsub.publish(topic.clone(), b"First MSG").unwrap();
                         println!("ConnectionEstablished");
                     },
+                    SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                        if peer_id.to_string() == "12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn" {
+                            
+                            println!("[!!] Lost connection to rendezvous server!");
+                            sleep(std::time::Duration::from_secs(5)).await;
+                            let _ = self.dial(rendezvous_address.clone());
+                        }
+                    },
                     SwarmEvent::OutgoingConnectionError { .. } => {
-                        //self.dial(send_back_addr.clone()).unwrap();
+                        sleep(std::time::Duration::from_secs(5)).await;
+                        let _ = self.dial(rendezvous_address.clone());
+                    },
+                    SwarmEvent::IncomingConnectionError { .. } => {
+                        sleep(std::time::Duration::from_secs(5)).await;
+                        let _ = self.dial(rendezvous_address.clone());
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Registered {
                         rendezvous_node,..
@@ -193,11 +208,11 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("Discover failed: {:?}, {:?}",error,rendezvous_node);
                         
                         
-                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                         
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
-                            cookie_cache.clone(),
+                            None, //cookie_cache.clone(),
                             None,
                             keypair.public().to_peer_id(),
                         );                        
@@ -241,9 +256,19 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
                             //self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                             println!("[WELCOME] Identified new peer_id then rendezvous: {:?}",peer_id.clone());
-                            if is_pub_listener_address_set {
-                                //self.behaviour_mut().pubsub.publish(topic.clone(), "Welcome new guy!").unwrap();
+                            
+
+                            match self.behaviour_mut().pubsub.publish(topic.clone(), "") {
+                                Ok(result) => {
+                                    println!("Send hello Message!");
+                                },
+                                Err(e) => {
+                                    println!("Error: {:?}",e);
+                                }
                             }
+
+                            
+
                             
                         } else {
                             self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
@@ -303,6 +328,15 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
             base_addr.push(protocol);
         }
         base_addr
+    }
+
+    fn _extract_peer_id(addr: &Multiaddr) -> Option<libp2p::PeerId> {
+        for protocol in addr.iter() {
+            if let libp2p::multiaddr::Protocol::P2p(peer_id) = protocol {
+                return Some(libp2p::PeerId::from(peer_id));
+            }
+        }
+        None
     }
 }
 

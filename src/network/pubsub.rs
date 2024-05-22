@@ -134,8 +134,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             if discovered_peers.insert(peer.clone()) {
                                 println!("Discovered: {} - {}",peer.clone(), address.clone());
                                 new_peer = true;
-                                
-                                self.dial(address.clone()).unwrap();
+                                self.add_peer_address(peer.clone(),address.clone());
+                                self.dial(peer.clone()).unwrap();
                             }
                         }
 
@@ -196,6 +196,11 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     })) => if peer_id != keypair.clone().public().to_peer_id() {
 
                         println!("Identified {:?}",info.observed_addr);
+                        let first_addr = info.listen_addrs.first().unwrap().clone();
+                        let last_addr = info.listen_addrs.last().unwrap().clone();
+
+                        println!("First-Last: {:?} - {:?}",&first_addr,&last_addr);
+                        self.add_peer_address(peer_id.clone(),info.listen_addrs.first().unwrap().clone());
 
                         if !is_pub_listener_address_set {
                             self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());

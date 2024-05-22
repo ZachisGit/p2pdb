@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
 
 use futures::StreamExt;
-use libp2p::{self, gossipsub, identify, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, Swarm};
+use libp2p::{self, gossipsub, identify, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, PeerId, Swarm};
 use tokio::time::sleep;
 
 
@@ -70,7 +70,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         let mut is_pub_listener_address_set: bool = false;
         
         let mut cookie_cache: Option<rendezvous::Cookie> = None;
-        let mut discovered_peers: std::collections::HashSet<Multiaddr> = std::collections::HashSet::new();
+        let mut discovered_peers: std::collections::HashSet<PeerId> = std::collections::HashSet::new();
 
         // Define a dict that maps a peer to its registration failure count
         let mut registration_failures: HashMap<libp2p::PeerId,std::time::Instant> = std::collections::HashMap::new();
@@ -84,9 +84,12 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     },
                     SwarmEvent::ConnectionClosed { peer_id, .. } => {
                         println!("[ConnectionClosed] {:?}",peer_id);
+                        discovered_peers.remove(&peer_id);
+
                     },
                     SwarmEvent::OutgoingConnectionError { peer_id,.. } => {
                         println!("[OutgoingConnectionError] {:?}",peer_id);
+                        discovered_peers.remove(&peer_id.unwrap());
                     },
                     SwarmEvent::IncomingConnectionError { send_back_addr,.. } => {
                         println!("[IncomingConnectionError] {:?}",send_back_addr);
@@ -118,7 +121,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         }
                         println!("");
 
-                        cookie_cache.replace(cookie.clone());
                         
                         let mut new_peer: bool = false;
                         for registration in registrations {
@@ -129,7 +131,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                 continue;
                             }
                             
-                            if discovered_peers.insert(address.clone()) {
+                            if discovered_peers.insert(peer.clone()) {
                                 println!("Discovered: {} - {}",peer.clone(), address.clone());
                                 new_peer = true;
                                 
@@ -139,6 +141,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                         if !new_peer {
                             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        } else {
+                            cookie_cache.replace(cookie.clone());
                         }
                         
                         self.behaviour_mut().rendezvous.discover(

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
 
 use futures::StreamExt;
-use libp2p::{self, upnp, gossipsub, identify, relay,rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, Multiaddr, Swarm};
+use libp2p::{self, gossipsub, identify, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, Swarm};
 use tokio::time::sleep;
 
 
@@ -74,7 +74,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
 
         let mut cookie_cache: Option<rendezvous::Cookie> = None;
-        let mut discovered_peers = std::collections::HashSet::new();
+        let mut discovered_peers: std::collections::HashSet<Multiaddr> = std::collections::HashSet::new();
 
         // Define a dict that maps a peer to its registration failure count
         let mut registration_failures: HashMap<libp2p::PeerId,std::time::Instant> = std::collections::HashMap::new();
@@ -172,11 +172,13 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             
                             let peer = registration.record.peer_id().clone();
                             if peer.clone() == keypair.public().to_peer_id().clone() {
-                                println!("My own address! {:?}",address);
                                 continue;
                             }
                             
                             if discovered_peers.insert(address.clone()) {
+                            //discovered_peers.insert(address.clone());
+                            //let peer_ids: Vec<libp2p::PeerId> = self.connected_peers().cloned().collect();
+                            //if !peer_ids.contains(&peer) {
                                 //if peer.clone() == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWDkBFGbXVAGzX6Z3Wa94D9FHHJnotxzrEWJ6r7n8s6S8P").unwrap() {
                                 //    new_peer = true;
                                 //    println!("Special dial!");
@@ -186,7 +188,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                     new_peer = true;
                                     
                                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                                    self.dial(address).unwrap();
+                                    println!("DIAL_RES: {:?}", self.dial(address.clone()).unwrap());
+                                    self.add_peer_address(peer.clone(), address.clone());
 
 
 
@@ -264,7 +267,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("MyPeerId: {:?}; Identified PeerId: {:?}",keypair.public().to_peer_id().clone(),peer_id.clone());
                         if peer_id != <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(){
                             println!("[NEW-EXT-ADDR]: {:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
-                            self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            //self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
                             //self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
                             println!("[WELCOME] Identified new peer_id then rendezvous: {:?}",peer_id.clone());
                             
@@ -320,6 +323,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
     }
 
     fn _register_inc_failures(&mut self, peer: libp2p::PeerId, registration_failures: &mut std::collections::HashMap<libp2p::PeerId, std::time::Instant>, namespace: &str) {
+        /*
         if !registration_failures.contains_key(&peer) || registration_failures[&peer] < std::time::Instant::now() - std::time::Duration::from_secs(10){ 
 
             self.behaviour_mut().rendezvous.register(
@@ -327,7 +331,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                 peer.clone(), 
                 std::default::Default::default(),
             ).unwrap();
-        }
+        }*/
     }
 
     fn _extract_base_multiaddr(addr: &Multiaddr) -> Multiaddr {

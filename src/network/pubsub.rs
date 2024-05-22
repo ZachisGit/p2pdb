@@ -135,7 +135,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                 println!("Discovered: {} - {}",peer.clone(), address.clone());
                                 new_peer = true;
                                 self.add_peer_address(peer.clone(),address.clone());
-                                self.dial(peer.clone()).unwrap();
+
+                                if peer != keypair.clone().public().to_peer_id() {
+                                    self.dial(peer.clone()).unwrap();
+                                }
                             }
                         }
 
@@ -196,18 +199,17 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     })) => if peer_id != keypair.clone().public().to_peer_id() {
 
                         println!("Identified {:?}",info.observed_addr);
-                        let first_addr = info.listen_addrs.first().unwrap().clone();
-                        let last_addr = info.listen_addrs.last().unwrap().clone();
 
-                        println!("First-Last: {:?} - {:?}",&first_addr,&last_addr);
-                        self.add_peer_address(peer_id.clone(),info.listen_addrs.first().unwrap().clone());
+                        
+                        if peer_id != keypair.clone().public().to_peer_id() {
+                            self.add_peer_address(peer_id.clone(),info.listen_addrs.first().unwrap().clone());
+                        }                        
 
                         if !is_pub_listener_address_set {
                             self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
                             let _ = self.listen_on(info.observed_addr.clone());
                             is_pub_listener_address_set = true;
                             self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
-
 
                             
                             self.behaviour_mut().rendezvous.register(

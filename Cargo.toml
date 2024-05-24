@@ -13,5 +13,7 @@ release = false
 async-std = { version = "1.12", features = ["attributes"] }
 async-trait = "0.1"
 futures = { version = "0.3.30" }
-libp2p = { version = "0.53.0", features = [ "kad","dcutr", "quic", "upnp", "relay", "async-std", "identify", "gossipsub", "macros", "noise", "ping", "rendezvous", "tcp", "dns", "tokio", "yamux"] }
+libp2p = { version = "0.53.0", features = [ "autonat","mdns","kad","dcutr", "quic", "upnp", "relay", "async-std", "identify", "gossipsub", "macros", "noise", "ping", "rendezvous", "tcp", "dns", "tokio", "yamux"] }
 tokio = { version = "1.37.0",features = [ "rt-multi-thread", "macros", "time"] }
+ahash = {}
+anyhow = {}

@@ -1,4 +1,5 @@
 mod pubsub;
+mod discovery;
 
 pub use pubsub::setup_swarm;
 pub use pubsub::Spinup;

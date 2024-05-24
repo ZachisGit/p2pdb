@@ -112,10 +112,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::OutgoingConnectionError { peer_id,error,connection_id } => {
                         
                         println!("[OutgoingConnectionError] {:?}, {:?}",peer_id.clone(),connection_id);
-                        discovered_peers.remove(&peer_id.unwrap().clone());
                         match peer_id {
                             Some(_) => {
                                 let discon_peer_id = peer_id.unwrap();
+                                discovered_peers.remove(&discon_peer_id.clone());
 
                                 loop {
                                     tokio::time::sleep(std::time::Duration::from_secs(5)).await;

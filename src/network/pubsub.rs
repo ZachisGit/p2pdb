@@ -110,23 +110,29 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                     },
                     SwarmEvent::OutgoingConnectionError { peer_id,error,connection_id } => {
-                        let discon_peer_id = peer_id.unwrap();
-                        println!("[OutgoingConnectionError] {:?}, {:?}",discon_peer_id.clone(),connection_id);
-                        discovered_peers.remove(&discon_peer_id.clone());
+                        
+                        println!("[OutgoingConnectionError] {:?}, {:?}",peer_id.clone(),connection_id);
+                        discovered_peers.remove(&peer_id.unwrap().clone());
+                        match peer_id {
+                            Some(_) => {
+                                let discon_peer_id = peer_id.unwrap();
 
-                        loop {
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                            println!("{:?}",self.network_info());
-                            
-                            match self.dial(discon_peer_id.clone()) {
-                                Ok {..} => {println!("Dial good!"); break; },
-                                Err{..} => {println!("Dial failed!")}
-                            }
+                                loop {
+                                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                                    println!("{:?}",self.network_info());
+                                    
+                                    match self.dial(discon_peer_id.clone()) {
+                                        Ok {..} => {println!("Dial good!"); break; },
+                                        Err{..} => {println!("Dial failed!")}
+                                    }
 
-                            if self.connected_peers().collect::<Vec<_>>().contains(&&discon_peer_id) {
-                                println!("Braking out of hell!");
-                                break;
-                            }
+                                    if self.connected_peers().collect::<Vec<_>>().contains(&&discon_peer_id) {
+                                        println!("Braking out of hell!");
+                                        break;
+                                    }
+                                }
+                            },
+                            None => {},
                         }
                     },
                     SwarmEvent::IncomingConnectionError { send_back_addr,.. } => {

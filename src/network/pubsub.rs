@@ -1,8 +1,8 @@
 use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
 
 use futures::StreamExt;
-use libp2p::{self, gossipsub, identify, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, PeerId, Swarm};
-use tokio::time::sleep;
+use libp2p::{self, gossipsub, identify, kad::store::MemoryStore, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, PeerId, Swarm};
+use tokio::time::{self, sleep};
 
 
 
@@ -39,7 +39,7 @@ pub fn setup_swarm(
             rendezvous: libp2p::rendezvous::client::Behaviour::new(key.clone()),
             //rendezvous_server: libp2p::rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
             pubsub: libp2p::gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Signed(key.clone()), gossipsub_config).unwrap(),
-            upnp: upnp::tokio::Behaviour::default(),
+            kademlia: libp2p::kad::Behaviour::new(node_keypair.public().to_peer_id(), MemoryStore::new(node_keypair.public().to_peer_id()))
         })?
         .with_swarm_config(|cfg| {
             cfg.with_idle_connection_timeout(std::time::Duration::from_secs(365 * 24 * 60 * 60))
@@ -64,13 +64,16 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
         let topic = gossipsub::IdentTopic::new(namespace.clone());
         let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap();
+        let rendezsvous_peer_id: libp2p::PeerId = <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap();
         
         self.dial(rendezvous_address.clone()).unwrap();
         let _ = self.listen_on(listener_address);
         let mut is_pub_listener_address_set: bool = false;
+        let mut is_first_node_connection: bool = false;
         
         let mut cookie_cache: Option<rendezvous::Cookie> = None;
         let mut discovered_peers: std::collections::HashSet<PeerId> = std::collections::HashSet::new();
+        let local_peer_id = keypair.public().to_peer_id();
 
         // Define a dict that maps a peer to its registration failure count
         let mut registration_failures: HashMap<libp2p::PeerId,std::time::Instant> = std::collections::HashMap::new();
@@ -80,19 +83,60 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::ConnectionEstablished { peer_id,.. } => {
                        
                         println!("Connection established with: {}",peer_id.clone());
-                        
+                        if !is_first_node_connection  { 
+                            self.behaviour_mut().kademlia.add_address(&rendezsvous_peer_id,rendezvous_address.clone());
+                            self.behaviour_mut().kademlia.bootstrap().unwrap();
+                            is_first_node_connection = true;
+                        }
                     },
                     SwarmEvent::ConnectionClosed { peer_id, .. } => {
                         println!("[ConnectionClosed] {:?}",peer_id);
                         discovered_peers.remove(&peer_id);
 
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                            println!("{:?}",self.network_info());
+                            
+                            match self.dial(peer_id.clone()) {
+                                Ok {..} => {println!("Dial good!"); break; },
+                                Err{..} => {println!("Dial failed!")}
+                            }
+
+                            if self.connected_peers().collect::<Vec<_>>().contains(&&peer_id) {
+                                println!("Braking out of hell!");
+                                break;
+                            }
+                        }
+
                     },
-                    SwarmEvent::OutgoingConnectionError { peer_id,.. } => {
-                        println!("[OutgoingConnectionError] {:?}",peer_id);
-                        discovered_peers.remove(&peer_id.unwrap());
+                    SwarmEvent::OutgoingConnectionError { peer_id,error,connection_id } => {
+                        let discon_peer_id = peer_id.unwrap();
+                        println!("[OutgoingConnectionError] {:?}, {:?}",discon_peer_id.clone(),connection_id);
+                        discovered_peers.remove(&discon_peer_id.clone());
+
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                            println!("{:?}",self.network_info());
+                            
+                            match self.dial(discon_peer_id.clone()) {
+                                Ok {..} => {println!("Dial good!"); break; },
+                                Err{..} => {println!("Dial failed!")}
+                            }
+
+                            if self.connected_peers().collect::<Vec<_>>().contains(&&discon_peer_id) {
+                                println!("Braking out of hell!");
+                                break;
+                            }
+                        }
                     },
                     SwarmEvent::IncomingConnectionError { send_back_addr,.. } => {
                         println!("[IncomingConnectionError] {:?}",send_back_addr);
+                    },
+                    SwarmEvent::NewExternalAddrCandidate { address} => {
+                        println!("Adding external address!: {:?}", address.clone());
+                        self.add_external_address(address.clone());
+                        
+                        let _ = self.listen_on(address.clone());
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Registered {
                         rendezvous_node,namespace,..
@@ -104,10 +148,12 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     })) => {
                         println!("RegisterFailed {}; {:?}",rendezvous_node.clone(),error);
                         
-                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        self.dial(rendezvous_address.clone()).unwrap();
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                         self.behaviour_mut().rendezvous.register(
-                            rendezvous::Namespace::new(namespace.to_string()).unwrap(),
-                            rendezvous_node.clone(),
+                            rendezvous::Namespace::new(namespace.to_string()).unwrap(),                            
+                            <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(),
                             std::default::Default::default(),
                         ).unwrap();                       
                     },
@@ -131,13 +177,14 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                 continue;
                             }
                             
-                            if discovered_peers.insert(peer.clone()) {
+                            if !discovered_peers.contains(&peer.clone()) && peer != keypair.public().to_peer_id() {
+                                discovered_peers.insert(peer.clone());
                                 println!("Discovered: {} - {}",peer.clone(), address.clone());
                                 new_peer = true;
-                                self.add_peer_address(peer.clone(),address.clone());
 
                                 if peer != keypair.clone().public().to_peer_id() {
-                                    self.dial(peer.clone()).unwrap();
+                                    println!("[DIAL] {:?}",address.clone());
+                                    self.dial(address.clone()).unwrap();
                                 }
                             }
                         }
@@ -150,9 +197,9 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
-                            cookie_cache.clone(),
+                            Some(cookie.clone()),
                             None,
-                            rendezvous_node.clone(),
+                            <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(),
                         );
 
                     },
@@ -162,14 +209,18 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                         println!("Discover failed: {:?}, {:?}",error,rendezvous_node);
                         
-                        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                        //tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        //self.dial(rendezvous_address.clone()).unwrap();
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                         
+                        println!("{:?}",self.network_info());
+                        /* 
                         self.behaviour_mut().rendezvous.discover(
                             Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                             None, //cookie_cache.clone(),
                             None,
-                            keypair.clone().public().to_peer_id(),
-                        );                        
+                            <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(),
+                        );*/                        
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Rendezvous(rendezvous::client::Event::Expired {
                         peer,..
@@ -177,8 +228,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("Expired: {:?}",peer);
                         
                         self.behaviour_mut().rendezvous.register(
-                            rendezvous::Namespace::new(namespace.to_string()).unwrap(),
-                            peer.clone(), 
+                            rendezvous::Namespace::new(namespace.to_string()).unwrap(),                            
+                            <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(),
                             std::default::Default::default(),
                         ).unwrap();
                     },
@@ -196,17 +247,21 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     },
                     SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received {
                         peer_id,info,..
-                    })) => if peer_id != keypair.clone().public().to_peer_id() {
+                    })) => {
 
-                        println!("Identified {:?}",info.observed_addr);
-
+                        println!("Identified {:?}",info.observed_addr.clone());
+                        println!("[EXT] {:?}",<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
                         
                         if peer_id != keypair.clone().public().to_peer_id() {
-                            self.add_peer_address(peer_id.clone(),info.listen_addrs.first().unwrap().clone());
+                            println!("[ADD] {:?}",peer_id.clone());
+                            //self.add_peer_address(peer_id.clone(),info.listen_addrs.first().unwrap().clone());
                         }                        
 
-                        if !is_pub_listener_address_set {
-                            self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                        if !is_pub_listener_address_set && peer_id == <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap() {
+
+                            //self.add_external_address(<Multiaddr as std::str::FromStr>::from_str(&format!("{}/p2p/{}",info.observed_addr,keypair.clone().public().to_peer_id().to_string())).unwrap());
+                            self.add_external_address(info.observed_addr.clone());
+                            println!("[LISTEN] {:?}",peer_id.clone());
                             let _ = self.listen_on(info.observed_addr.clone());
                             is_pub_listener_address_set = true;
                             self.behaviour_mut().pubsub.subscribe(&topic).unwrap();
@@ -222,7 +277,22 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                 Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
                                 None, //[!]cookie_cache.clone(),
                                 None,
-                                peer_id.clone(),
+                                <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap(),
+                            );
+                        }
+                        else if peer_id == rendezsvous_peer_id.clone() {
+                            println!("IMPORTANT: {:?}",peer_id.clone());
+                            self.behaviour_mut().rendezvous.register(
+                                rendezvous::Namespace::new(namespace.to_string()).unwrap(),
+                                rendezsvous_peer_id.clone(),
+                                std::default::Default::default(),
+                            ).unwrap();
+                            
+                            self.behaviour_mut().rendezvous.discover(
+                                Some(rendezvous::Namespace::new(namespace.to_string()).unwrap()),
+                                None, //[!]cookie_cache.clone(),
+                                None,
+                                rendezsvous_peer_id.clone(),
                             );
                         }
                     }
@@ -273,7 +343,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 pub struct RendezvousGossipBehaviour {
     identify: identify::Behaviour,
     rendezvous: rendezvous::client::Behaviour,
-    //rendezvous_server: rendezvous::server::Behaviour,
     pubsub: gossipsub::Behaviour,
-    upnp: upnp::tokio::Behaviour
+    kademlia: libp2p::kad::Behaviour<libp2p::kad::store::MemoryStore>
 }

@@ -4,7 +4,7 @@ use futures::StreamExt;
 use libp2p::{self, gossipsub, identify, kad::store::MemoryStore, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, PeerId, Swarm};
 use tokio::time::{self, sleep};
 
-use crate::network::discovery::DiscoveryBehaviour;
+use crate::network::discovery;
 
 
 fn message_id_fn(message: &gossipsub::Message) -> gossipsub::MessageId {
@@ -34,9 +34,10 @@ pub fn setup_swarm(
             libp2p::yamux::Config::default,
         )?
         .with_behaviour(|key| RendezvousGossipBehaviour {
-            discovery: super::discovery::DiscoveryConfig::new(node_keypair.public(), "calibnet")
+            discovery: discovery::DiscoveryConfig::new(key.clone(), node_keypair.public(), "p2pdb-testnet")
             .with_mdns(false)
             .with_kademlia(true)
+            .with_rendezvous(true)
             .with_user_defined(rendezvous_nodes.clone())
             .unwrap()
             .target_peer_count(128)
@@ -53,10 +54,6 @@ pub fn setup_swarm(
 
 // Define and implement a trait for Swarm<RendezvousGossipBehaviour>
 pub trait Spinup {
-    fn _register_inc_failures(&mut self, peer: libp2p::PeerId, registration_failures: &mut std::collections::HashMap<libp2p::PeerId, std::time::Instant>,namespace: &str);
-    fn _extract_base_multiaddr(addr: &Multiaddr) -> Multiaddr;
-    fn _extract_peer_id(addr: &Multiaddr) -> Option<libp2p::PeerId>;
-
     async fn spinup(&mut self, namespace: String, keypair: libp2p::identity::Keypair, cluster_keypair: libp2p::identity::Keypair, rendezvous_address: Multiaddr) -> Result<(), Box<dyn Error>>;
 }
 
@@ -78,49 +75,17 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("NetStatus: {:?}",self.behaviour().discovery.nat_status());
                     }
                     others => {
-                        println!("OTHERS: {:?};",others);
+                        println!("[E]: {:?};",others);
                     }
                 }
             }
         }
         Ok(())
     }
-
-    fn _register_inc_failures(&mut self, peer: libp2p::PeerId, registration_failures: &mut std::collections::HashMap<libp2p::PeerId, std::time::Instant>, namespace: &str) {
-        /*
-        if !registration_failures.contains_key(&peer) || registration_failures[&peer] < std::time::Instant::now() - std::time::Duration::from_secs(10){ 
-
-            self.behaviour_mut().rendezvous.register(
-                rendezvous::Namespace::new(namespace.to_string()).unwrap(),
-                peer.clone(), 
-                std::default::Default::default(),
-            ).unwrap();
-        }*/
-    }
-
-    fn _extract_base_multiaddr(addr: &Multiaddr) -> Multiaddr {
-        let mut base_addr = Multiaddr::empty();
-        for protocol in addr.iter() {
-            if protocol == libp2p::multiaddr::Protocol::P2p(libp2p::PeerId::random().into()) {
-                break;
-            }
-            base_addr.push(protocol);
-        }
-        base_addr
-    }
-
-    fn _extract_peer_id(addr: &Multiaddr) -> Option<libp2p::PeerId> {
-        for protocol in addr.iter() {
-            if let libp2p::multiaddr::Protocol::P2p(peer_id) = protocol {
-                return Some(libp2p::PeerId::from(peer_id));
-            }
-        }
-        None
-    }
 }
 
 
 #[derive(NetworkBehaviour)]
 pub struct RendezvousGossipBehaviour {
-    discovery: DiscoveryBehaviour
+    discovery: discovery::DiscoveryBehaviour,
 }

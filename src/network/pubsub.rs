@@ -48,6 +48,7 @@ pub fn setup_swarm(
             cfg.with_idle_connection_timeout(std::time::Duration::from_secs(365 * 24 * 60 * 60))
         })
         .build();
+
     Ok(swarm)
 }
 
@@ -65,6 +66,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap();
         let rendezsvous_peer_id: libp2p::PeerId = <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap();
         
+        self.add_external_address(listener_address.clone());
         self.behaviour_mut().discovery.bootstrap().unwrap();
 
         loop {
@@ -75,7 +77,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("NetStatus: {:?}",self.behaviour().discovery.nat_status());
                     }
                     others => {
-                        println!("[E]: {:?};",others);
+                        //println!("[E]: {:?};",others);
                     }
                 }
             }

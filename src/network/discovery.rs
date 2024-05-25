@@ -2,18 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use std::{
-    borrow::BorrowMut, cmp, collections::VecDeque, task::{Context, Poll}, time::Duration
+    borrow::BorrowMut, cmp, collections::VecDeque, task::{Context, Poll}, thread::sleep, time::Duration
 };
 
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
-use async_std::task::sleep;
 use ::futures::FutureExt;
 use libp2p::{
     autonat, core::Multiaddr, identify, identity::{Keypair, PeerId, PublicKey}, kad::{self, store::MemoryStore}, mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent}, multiaddr::Protocol, rendezvous::{self, Namespace}, swarm::{
-        behaviour::toggle::Toggle,
-        derive_prelude::*,
-        dial_opts::{DialOpts, PeerCondition},
-        NetworkBehaviour, ToSwarm,
+        behaviour::toggle::Toggle, derive_prelude::*, dial_opts::{DialOpts, PeerCondition}, NetworkBehaviour, SwarmEvent, ToSwarm
     }, upnp, Stream, StreamProtocol
 };
 use tokio::time::Interval;
@@ -142,7 +138,7 @@ impl<'a> DiscoveryConfig<'a> {
         let kad_config = {
             let mut cfg = kad::Config::default();
             cfg.set_protocol_names(vec![StreamProtocol::try_from_owned(format!(
-                "/fil/kad/{network_name}/kad/1.0.0"
+                "/openp2p/{network_name}/1.0.0"
             ))?]);
             cfg
         };
@@ -183,8 +179,8 @@ impl<'a> DiscoveryConfig<'a> {
                 kademlia: kademlia_opt.into(),
                 mdns: mdns_opt.into(),
                 identify: identify::Behaviour::new(
-                    identify::Config::new("ipfs/0.1.0".into(), local_public_key)
-                        .with_agent_version(format!("forest-{}", "PlaceHolder"))
+                    identify::Config::new("p2pdb/0.0.1".into(), local_public_key.clone())
+                        .with_agent_version(format!("p2pdb-{}", network_name.clone()))
                         .with_push_listen_addr_updates(true),
                 ),
                 autonat: autonat::Behaviour::new(local_peer_id, Default::default()),
@@ -201,6 +197,7 @@ impl<'a> DiscoveryConfig<'a> {
             custom_seed_peers: user_defined,
             pending_dial_opts: VecDeque::new(),
             rv_namespace: rendezvous::Namespace::new(network_name.to_string()).unwrap(),
+            local_public_key: local_public_key.clone(),
         })
     }
 }
@@ -234,6 +231,8 @@ pub struct DiscoveryBehaviour {
     pending_dial_opts: VecDeque<DialOpts>,
     /// Namespace
     rv_namespace: rendezvous::Namespace,
+    /// For peerId inference
+    local_public_key: PublicKey,
 }
 
 #[derive(Default)]
@@ -443,15 +442,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
                                 // Check if identified node has rendezvous server
                                 // protocol enabled if so call discover and register
-                                if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                    if let Some(peer_info) = self.peer_info.get(peer_id) {
-                                        println!("Identified: rendezvous-server {:?}",peer_id.clone());
-                                        if peer_info.agent_version == Some("rendezvous".to_string()) {
-                                            rv.discover(Some(self.rv_namespace.clone()), None, None, peer_id.clone());
-                                            rv.register(self.rv_namespace.clone(), peer_id.clone(), Some(32)).unwrap();
-                                        }
+                                if self.custom_seed_peers.iter().find(|peer| {peer.0 == peer_id.clone()}).is_some() {
+                                    println!("Identified: rendezvous-server {:?}",peer_id.clone());
+                                    if let Some(rv) = self.discovery.rendezvous.as_mut() {
+                                        rv.register(self.rv_namespace.clone(), peer_id.clone(), None).unwrap();
+                                        rv.discover(Some(self.rv_namespace.clone()), None, None, peer_id.clone());
                                     }
                                 }
+
                             }
                         }
                         DerivedDiscoveryBehaviourEvent::Autonat(_) => {}
@@ -509,14 +507,17 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 }
 
                                 for registration in registrations {
+                                    if registration.record.peer_id() == self.local_public_key.to_peer_id() {
+                                        continue;
+                                    }
+
                                     if let Some(kad) = self.discovery.kademlia.as_mut() {
                                         kad.add_address(&registration.record.peer_id(),registration.record.addresses().first().unwrap().clone());
                                     }
 
-                                    let _ = sleep(Duration::from_secs(32));
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                         println!("Rendezvous Discovered - {:?}, {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().clone());
-                                        let _ = tokio::time::sleep(Duration::from_secs(32));
+                                        sleep(Duration::from_secs(32));
                                         rv.discover(Some(registration.namespace.clone()), Some(cookie.clone()), Some(32), rendezvous_node.clone())
                                     }       
                                 }
@@ -526,7 +527,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     println!("Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        let _ = tokio::time::sleep(Duration::from_secs(32));
+                                        sleep(Duration::from_secs(32));
                                         
                                         rv.discover(Some(self.rv_namespace.clone()), None, None, rendezvous_node.clone())
                                     }                         
@@ -536,15 +537,15 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                             },
                             rendezvous::client::Event::RegisterFailed { rendezvous_node, namespace, error } => {
                                 if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                    println!("Rendezvous RegisterFailed - {:?}",rendezvous_node.clone());
-                                    let _ = sleep(Duration::from_secs(32));
-                                    rv.register(self.rv_namespace.clone(), rendezvous_node.clone(), Some(32)).unwrap();
+                                    println!("Rendezvous RegisterFailed - {:?}",rendezvous_node.clone());                                    
+                                    sleep(Duration::from_secs(32));
+                                    rv.register(self.rv_namespace.clone(), rendezvous_node.clone(), None).unwrap();
                                 }
                             },
                             rendezvous::client::Event::Expired { peer } => {
                                 if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                     println!("Rendezvous Expired - {:?}",peer.clone());
-                                    rv.register(self.rv_namespace.clone(), peer.clone(), Some(32)).unwrap();
+                                    rv.register(self.rv_namespace.clone(), peer.clone(), None).unwrap();
                                 }
                             },
                         },

@@ -463,7 +463,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 if self.custom_seed_peers.iter().find(|peer| {peer.0 == peer_id.clone()}).is_some() {
                                     println!("Identified: rendezvous-server {:?}",peer_id.clone());
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        rv.register(self.rv_namespace.clone(), peer_id.clone(), None).unwrap();
                                         rv.discover(Some(self.rv_namespace.clone()), None, None, peer_id.clone());
                                     }
                                 }
@@ -599,6 +598,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 }
                 ToSwarm::NewExternalAddrCandidate(addr) => {
                     println!("[NEAC] {:?}",addr.clone());
+                    if let Some(rv) = self.discovery.rendezvous.as_mut() {
+                        rv.register(self.rv_namespace.clone(), self.custom_seed_peers.first().unwrap().0.clone(), None).unwrap_err();
+                    }
                     return Poll::Ready(ToSwarm::NewExternalAddrCandidate(addr))
                 }
                 ToSwarm::ExternalAddrConfirmed(addr) => {

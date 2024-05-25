@@ -66,7 +66,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
         let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap();
         let rendezsvous_peer_id: libp2p::PeerId = <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap();
         
-        self.add_external_address(listener_address.clone());
         self.behaviour_mut().discovery.bootstrap().unwrap();
 
         loop {

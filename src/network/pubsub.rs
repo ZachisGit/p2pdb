@@ -75,8 +75,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::ConnectionEstablished {peer_id, ..} => {
                         println!("Connection established with: {:?}", peer_id);
                         println!("NetStatus: {:?}",self.behaviour().discovery.nat_status());
-                    }
-                    others => {
+                    },
+                    _ => {
                         //println!("[E]: {:?};",others);
                     }
                 }

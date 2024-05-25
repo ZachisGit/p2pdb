@@ -44,6 +44,9 @@ pub enum DiscoveryEvent {
 
     /// Discovery event
     Discovery(Box<DerivedDiscoveryBehaviourEvent>),
+
+    /// New external address
+    NewExternalAddr(Multiaddr),
 }
 
 /// `DiscoveryBehaviour` configuration.
@@ -198,6 +201,7 @@ impl<'a> DiscoveryConfig<'a> {
             pending_dial_opts: VecDeque::new(),
             rv_namespace: rendezvous::Namespace::new(network_name.to_string()).unwrap(),
             local_public_key: local_public_key.clone(),
+            pending_add_external_address: VecDeque::new(),
         })
     }
 }
@@ -233,6 +237,8 @@ pub struct DiscoveryBehaviour {
     rv_namespace: rendezvous::Namespace,
     /// For peerId inference
     local_public_key: PublicKey,
+    /// Add external address event
+    pending_add_external_address: VecDeque<Multiaddr>,
 }
 
 #[derive(Default)]
@@ -281,6 +287,11 @@ impl DiscoveryBehaviour {
     pub fn nat_status(&self) -> autonat::NatStatus {
         self.discovery.autonat.nat_status()
     }
+
+    pub fn add_external_address(&mut self,addr: &Multiaddr) {
+        self.pending_add_external_address.push_back(addr.clone());
+    }
+    
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
@@ -401,6 +412,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             return Poll::Ready(ToSwarm::Dial { opts });
         }
 
+        // External Address event
+        if let Some(addr) = self.pending_add_external_address.pop_front() {
+            return Poll::Ready(ToSwarm::NewExternalAddrCandidate { 0: addr });
+        }
+
         // Poll the stream that fires when we need to start a random Kademlia query.
         while self.next_kad_random_query.poll_tick(cx).is_ready() {
             if self.n_node_connected < self.target_peer_count {
@@ -440,6 +456,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     }
                                 }
 
+                                self.add_external_address(&info.observed_addr);
+
                                 // Check if identified node has rendezvous server
                                 // protocol enabled if so call discover and register
                                 if self.custom_seed_peers.iter().find(|peer| {peer.0 == peer_id.clone()}).is_some() {
@@ -449,7 +467,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                         rv.discover(Some(self.rv_namespace.clone()), None, None, peer_id.clone());
                                     }
                                 }
-
                             }
                         }
                         DerivedDiscoveryBehaviourEvent::Autonat(_) => {}
@@ -581,6 +598,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     return Poll::Ready(ToSwarm::RemoveListener { id })
                 }
                 ToSwarm::NewExternalAddrCandidate(addr) => {
+                    println!("[NEAC] {:?}",addr.clone());
                     return Poll::Ready(ToSwarm::NewExternalAddrCandidate(addr))
                 }
                 ToSwarm::ExternalAddrConfirmed(addr) => {

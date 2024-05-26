@@ -537,7 +537,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                         println!("Rendezvous Discovered - {:?}, {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().clone());
-                                        sleep(Duration::from_secs(10));
+                                        //sleep(Duration::from_secs(10));
                                         rv.discover(Some(registration.namespace.clone()), Some(cookie.clone()), Some(32), rendezvous_node.clone())
                                     }       
                                 }
@@ -547,7 +547,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     println!("Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        sleep(Duration::from_secs(32));
+                                        //sleep(Duration::from_secs(32));
                                         rv.discover(Some(self.rv_namespace.clone()), None, None, rendezvous_node.clone())
                                     }                         
                             },

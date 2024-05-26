@@ -61,12 +61,9 @@ pub trait Spinup {
 
 impl Spinup for Swarm<RendezvousGossipBehaviour> {
     async fn spinup(&mut self,namespace: String, keypair: libp2p::identity::Keypair, cluster_keypair: libp2p::identity::Keypair,rendezvous_address: Multiaddr) -> Result<(), Box<dyn Error>> {
-
-        let topic = gossipsub::IdentTopic::new(namespace.clone());
-        let listener_address: Multiaddr = format!("/ip4/0.0.0.0/tcp/0").parse::<Multiaddr>().unwrap();
-        let rendezsvous_peer_id: libp2p::PeerId = <libp2p::PeerId as std::str::FromStr>::from_str("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn").unwrap();
         
         self.behaviour_mut().discovery.bootstrap().unwrap();
+        let mut first_connect = false;
 
         loop {
             tokio::select! {
@@ -76,14 +73,22 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("NetStatus: {:?}",self.behaviour().discovery.nat_status());
                     },
                     SwarmEvent::NewExternalAddrCandidate { address } => {
-                        self.add_external_address(address.clone());
-                        match self.behaviour_mut().discovery.start_rendezvous() { 
-                            true => { println!("Rendezvous started."); },
-                            false => { println!("Failed to start rendezvous."); }
+                        if !first_connect {
+                            first_connect=false;
+                            self.add_external_address(address.clone());
+                            match self.behaviour_mut().discovery.start_rendezvous() { 
+                                true => { println!("Rendezvous started."); },
+                                false => { println!("Failed to start rendezvous."); }
+                            }
                         }
                     },
+                    SwarmEvent::NewListenAddr { address,.. } => {
+                        println!("New listen Address: {:?}",address.clone());
+                        self.listen_on(address.clone()).unwrap();
+
+                    },
                     others => {
-                        println!("[E]: {:?};",others);
+                        //println!("[E]: {:?};",others);
                     }
                 }
             }

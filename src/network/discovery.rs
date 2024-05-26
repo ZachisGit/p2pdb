@@ -44,9 +44,6 @@ pub enum DiscoveryEvent {
 
     /// Discovery event
     Discovery(Box<DerivedDiscoveryBehaviourEvent>),
-
-    /// New external address
-    NewExternalAddr(Multiaddr),
 }
 
 /// `DiscoveryBehaviour` configuration.
@@ -203,6 +200,11 @@ impl<'a> DiscoveryConfig<'a> {
             local_public_key: local_public_key.clone(),
             is_rendezvous_started: false,
             rv_discover_retries: 0,
+            rv_registation_retries: 0,
+            duration_to_next_rv_register_check: Duration::from_secs(10),
+            duration_to_next_rv_discover_check: Duration::from_secs(10),
+            next_rv_register_check: tokio::time::interval(Duration::from_secs(10)),
+            next_rv_discover_check: tokio::time::interval(Duration::from_secs(10)),
         })
     }
 }
@@ -240,8 +242,17 @@ pub struct DiscoveryBehaviour {
     local_public_key: PublicKey,
     /// Rendezvous started
     is_rendezvous_started: bool,
-    /// Retrie count of rendezvous discovery
+
+    /// Retry count of rendezvous discovery
     rv_discover_retries: u64,
+    rv_registation_retries: u64,
+    /// Registration failed check next rv_register_check
+    next_rv_register_check: Interval,
+    next_rv_discover_check: Interval,
+    /// Duration to next rv_register_check
+    duration_to_next_rv_register_check: Duration,
+    duration_to_next_rv_discover_check: Duration
+
 }
 
 #[derive(Default)]
@@ -432,6 +443,33 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             return Poll::Ready(ToSwarm::Dial { opts });
         }
 
+        while self.next_rv_register_check.poll_tick(cx).is_ready() {
+            if self.rv_registation_retries > 0 {
+                self.rv_registation_retries = 0;
+                if let Some(rv) = self.discovery.rendezvous.as_mut() {                    
+                    match rv.register(self.rv_namespace.clone(), self.custom_seed_peers.first().unwrap().0.clone(), None) {
+                        Ok(..) => {println!("new register request out...")},
+                        Err(..) => {println!("failed to send register")}
+                    };                    
+                }
+            }
+            self.next_rv_register_check = tokio::time::interval(self.duration_to_next_rv_register_check);
+            self.next_rv_register_check.reset();
+        }
+
+        while self.next_rv_discover_check.poll_tick(cx).is_ready() {
+            if self.rv_discover_retries > 0 {
+                if let Some(rv) = self.discovery.rendezvous.as_mut() {
+                    rv.discover(Some(self.rv_namespace.clone()), None, Some(32), self.custom_seed_peers.first().unwrap().0.clone());   
+                }
+                self.rv_discover_retries = 0;
+            }
+            self.next_rv_discover_check = tokio::time::interval(self.duration_to_next_rv_discover_check);
+            self.next_rv_discover_check.reset();
+            
+            println!("[Status] peer-count={:?};  discover-retries={:?};  register-retries={:?};",self.n_node_connected,self.rv_discover_retries,self.rv_register_retries);
+        }
+
         // Poll the stream that fires when we need to start a random Kademlia query.
         while self.next_kad_random_query.poll_tick(cx).is_ready() {
             if self.n_node_connected < self.target_peer_count {
@@ -531,7 +569,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                             rendezvous::client::Event::Discovered { rendezvous_node, registrations, cookie } => {
 
                                 self.rv_discover_retries = 0;
-                                println!("[discover] peer-count={:?};  con-retries={:?};",self.n_node_connected,self.rv_discover_retries);
 
                                 for registration in registrations {
                                     if registration.record.peer_id() == self.local_public_key.to_peer_id() {
@@ -567,19 +604,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                         // Max wait time after backoff is 1 min between retries
                                         if self.rv_discover_retries < 6 { self.rv_discover_retries += 1; }
 
-                                        println!("[discover] peer-count={:?};  con-retries={:?};",self.n_node_connected,self.rv_discover_retries);
-                                        sleep(Duration::from_secs(10*self.rv_discover_retries));
-                                        rv.discover(Some(self.rv_namespace.clone()), None, Some(32), rendezvous_node.clone())
+                                        self.next_rv_discover_check = tokio::time::interval(self.duration_to_next_rv_discover_check);
+                                        self.next_rv_discover_check.reset();
+                                        
                                     }                         
                             },
                             rendezvous::client::Event::Registered { rendezvous_node, ttl, namespace } => {
                                 println!("Rendezvous Registered - {:?}",rendezvous_node.clone());
+                                self.rv_registation_retries = 0;
                             },
                             rendezvous::client::Event::RegisterFailed { rendezvous_node, namespace, error } => {
                                 if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                    println!("Rendezvous RegisterFailed - {:?}",rendezvous_node.clone());                                    
-                                    sleep(Duration::from_secs(32));
-                                    rv.register(self.rv_namespace.clone(), rendezvous_node.clone(), None).unwrap();
+                                    println!("Rendezvous RegisterFailed - {:?}",rendezvous_node.clone());      
+                                    
+                                    self.rv_registation_retries += 1;
+                                    self.next_rv_register_check = tokio::time::interval(self.duration_to_next_rv_register_check);
+                                    self.next_rv_register_check.reset();
                                 }
                             },
                             rendezvous::client::Event::Expired { peer } => {

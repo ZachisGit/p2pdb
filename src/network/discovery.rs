@@ -536,7 +536,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                                 .build(),
                                         );
 
-                                        self.pending_events.push_back(DiscoveryEvent::Discovery(Box::new(Discovery)))
+                                        //self.pending_events.push_back(DiscoveryEvent::Discovery(Box::new(DerivedDiscoveryBehaviourEvent)))
                                     }
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
@@ -605,6 +605,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 }
                 ToSwarm::NewExternalAddrCandidate(addr) => {
                     println!("[NEA-Candidate] {:?}",addr.clone());
+
                     return Poll::Ready(ToSwarm::NewExternalAddrCandidate(addr))
                 }
                 ToSwarm::ExternalAddrConfirmed(addr) => {

@@ -183,7 +183,7 @@ impl<'a> DiscoveryConfig<'a> {
                 mdns: mdns_opt.into(),
                 identify: identify::Behaviour::new(
                     identify::Config::new("p2pdb/0.0.1".into(), local_public_key.clone())
-                        .with_agent_version(format!("p2pdb-{}", network_name.clone()))
+                        .with_agent_version(format!("p2pdb-{}", network_name))
                         .with_push_listen_addr_updates(true),
                 ),
                 autonat: autonat::Behaviour::new(local_peer_id, Default::default()),
@@ -202,6 +202,7 @@ impl<'a> DiscoveryConfig<'a> {
             rv_namespace: rendezvous::Namespace::new(network_name.to_string()).unwrap(),
             local_public_key: local_public_key.clone(),
             is_rendezvous_started: false,
+            rv_discover_retries: 0,
         })
     }
 }
@@ -239,6 +240,8 @@ pub struct DiscoveryBehaviour {
     local_public_key: PublicKey,
     /// Rendezvous started
     is_rendezvous_started: bool,
+    /// Retrie count of rendezvous discovery
+    rv_discover_retries: u64,
 }
 
 #[derive(Default)]
@@ -527,8 +530,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                         DerivedDiscoveryBehaviourEvent::Rendezvous(ev) => match ev {
                             rendezvous::client::Event::Discovered { rendezvous_node, registrations, cookie } => {
 
-
-                                println!("[discover] count={:?}",self.n_node_connected);
+                                self.rv_discover_retries = 0;
+                                println!("[discover] peer-count={:?};  con-retries={:?};",self.n_node_connected,self.rv_discover_retries);
 
                                 for registration in registrations {
                                     if registration.record.peer_id() == self.local_public_key.to_peer_id() {
@@ -561,7 +564,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     println!("[!] Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        sleep(Duration::from_secs(10));
+                                        self.rv_discover_retries += 1;
+                                        println!("[discover] peer-count={:?};  con-retries={:?};",self.n_node_connected,self.rv_discover_retries);
+                                        sleep(Duration::from_secs(10*self.rv_discover_retries));
                                         rv.discover(Some(self.rv_namespace.clone()), None, Some(32), rendezvous_node.clone())
                                     }                         
                             },

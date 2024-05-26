@@ -530,13 +530,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     if let Some(kad) = self.discovery.kademlia.as_mut() {
                                         println!("Added address to KAD {:?} {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().unwrap().clone());
                                         kad.add_address(&registration.record.peer_id(),registration.record.addresses().first().unwrap().clone());
-                                        self.pending_dial_opts.push_back(
-                                            DialOpts::peer_id(registration.record.peer_id().clone())
-                                                .condition(PeerCondition::Disconnected)
-                                                .addresses(vec![registration.record.addresses().first().unwrap().clone()])
-                                                .build(),
-                                        );
-                                        
                                         self.peers.insert(registration.record.peer_id().clone());
 
                                         //self.pending_events.push_back(DiscoveryEvent::Discovery(Box::new(DerivedDiscoveryBehaviourEvent)))

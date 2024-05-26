@@ -201,7 +201,7 @@ impl<'a> DiscoveryConfig<'a> {
             pending_dial_opts: VecDeque::new(),
             rv_namespace: rendezvous::Namespace::new(network_name.to_string()).unwrap(),
             local_public_key: local_public_key.clone(),
-            pending_add_external_address: VecDeque::new(),
+            is_rendezvous_started: false,
         })
     }
 }
@@ -237,8 +237,8 @@ pub struct DiscoveryBehaviour {
     rv_namespace: rendezvous::Namespace,
     /// For peerId inference
     local_public_key: PublicKey,
-    /// Add external address event
-    pending_add_external_address: VecDeque<Multiaddr>,
+    /// Rendezvous started
+    is_rendezvous_started: bool,
 }
 
 #[derive(Default)]
@@ -289,9 +289,17 @@ impl DiscoveryBehaviour {
     }
 
     pub fn start_rendezvous(&mut self,) -> bool{
+        if !self.is_rendezvous_started {
+            println!("RV Start event prevented");
+            return true;
+        }
+
         if let Some(rv) = self.discovery.rendezvous.as_mut() {
             match rv.register(self.rv_namespace.clone(), self.custom_seed_peers.first().unwrap().0.clone(), None) {
-                Ok(()) => return true,
+                Ok(()) => { 
+                    self.is_rendezvous_started = true;
+                    return true
+                },
                 Err(_e) => return false 
             }
         }

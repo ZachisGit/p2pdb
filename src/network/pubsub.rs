@@ -17,14 +17,6 @@ pub fn setup_swarm(
     node_keypair: libp2p::identity::Keypair,
     rendezvous_nodes: Vec<Multiaddr>
 ) -> Result<Swarm<RendezvousGossipBehaviour>, Box<dyn Error>> {
-
-  // Set a custom gossipsub configuration
-    let gossipsub_config = gossipsub::ConfigBuilder::default()
-    .heartbeat_interval(std::time::Duration::from_secs(10))
-    .validation_mode(gossipsub::ValidationMode::Strict)
-    .message_id_fn(message_id_fn)
-    .build()
-    .expect("Valid config");
     
     let swarm = libp2p::SwarmBuilder::with_existing_identity(node_keypair.clone())
         .with_tokio()
@@ -70,14 +62,13 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                 event = self.select_next_some() => match event {
                     SwarmEvent::ConnectionEstablished {peer_id, ..} => {
                         println!("Connection established with: {:?}", peer_id);
-                        println!("NetStatus: {:?}",self.behaviour().discovery.nat_status());
                     },
                     SwarmEvent::NewExternalAddrCandidate { address } => {
                         if !first_connect {
-                            first_connect=false;
+                            first_connect=true;
                             self.add_external_address(address.clone());
                             match self.behaviour_mut().discovery.start_rendezvous() { 
-                                true => { println!("Rendezvous started."); },
+                                true => { println!("Rendezvous started. {:?}",address.clone()); },
                                 false => { println!("Failed to start rendezvous."); }
                             }
                         }
@@ -88,7 +79,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
                     },
                     others => {
-                        //println!("[E]: {:?};",others);
+                        println!("[E]: {:?};",others);
                     }
                 }
             }

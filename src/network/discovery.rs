@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use std::{
-    borrow::BorrowMut, cmp, collections::VecDeque, task::{Context, Poll}, thread::sleep, time::Duration
+    borrow::BorrowMut, cmp, collections::VecDeque, task::{Context, Poll}, time::Duration
 };
 
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
@@ -199,12 +199,15 @@ impl<'a> DiscoveryConfig<'a> {
             rv_namespace: rendezvous::Namespace::new(network_name.to_string()).unwrap(),
             local_public_key: local_public_key.clone(),
             is_rendezvous_started: false,
-            rv_discover_retries: 0,
-            rv_registation_retries: 0,
+            rv_discover_retries: -1,
+            rv_registation_retries: -1,
             duration_to_next_rv_register_check: Duration::from_secs(10),
             duration_to_next_rv_discover_check: Duration::from_secs(10),
             next_rv_register_check: tokio::time::interval(Duration::from_secs(10)),
             next_rv_discover_check: tokio::time::interval(Duration::from_secs(10)),
+            duration_to_next_rv_discovery_interval: Duration::from_secs(10),
+            next_rv_discovery_interval: tokio::time::interval(Duration::from_secs(10)),
+            rv_cookie: None,
         })
     }
 }
@@ -244,15 +247,19 @@ pub struct DiscoveryBehaviour {
     is_rendezvous_started: bool,
 
     /// Retry count of rendezvous discovery
-    rv_discover_retries: u64,
-    rv_registation_retries: u64,
+    rv_discover_retries: i64,
+    rv_registation_retries: i64,
     /// Registration failed check next rv_register_check
     next_rv_register_check: Interval,
     next_rv_discover_check: Interval,
     /// Duration to next rv_register_check
     duration_to_next_rv_register_check: Duration,
-    duration_to_next_rv_discover_check: Duration
+    duration_to_next_rv_discover_check: Duration,
 
+    /// Natural Rendezvous discover interval
+    duration_to_next_rv_discovery_interval: Duration,
+    next_rv_discovery_interval: Interval,
+    rv_cookie: Option<rendezvous::Cookie>,
 }
 
 #[derive(Default)]
@@ -309,17 +316,7 @@ impl DiscoveryBehaviour {
         }
 
         self.is_rendezvous_started = true;
-
-        if let Some(rv) = self.discovery.rendezvous.as_mut() {
-            match rv.register(self.rv_namespace.clone(), self.custom_seed_peers.first().unwrap().0.clone(), None) {
-                Ok(()) => { 
-                    println!("RV Registered");
-                    self.is_rendezvous_started = true;
-                    return true
-                },
-                Err(_e) => { println!("RV Registration Failed"); return false}
-            }
-        }
+        self.rv_registation_retries = 1;
         false
     }
     
@@ -462,12 +459,23 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 if let Some(rv) = self.discovery.rendezvous.as_mut() {
                     rv.discover(Some(self.rv_namespace.clone()), None, Some(32), self.custom_seed_peers.first().unwrap().0.clone());   
                 }
-                self.rv_discover_retries = 0;
             }
             self.next_rv_discover_check = tokio::time::interval(self.duration_to_next_rv_discover_check);
             self.next_rv_discover_check.reset();
             
             println!("[Status] peer-count={:?};  discover-retries={:?};  register-retries={:?};",self.n_node_connected,self.rv_discover_retries,self.rv_registation_retries);
+        }
+
+        while self.next_rv_discovery_interval.poll_tick(cx).is_ready() {
+            // Only if everything is fine and dandy
+            if self.rv_discover_retries == 0 {                
+                if let Some(rv) = self.discovery.rendezvous.as_mut() {
+                    rv.discover(Some(self.rv_namespace.clone()), self.rv_cookie.clone(), None, self.custom_seed_peers.first().unwrap().0.clone())
+                }
+            }
+
+            self.next_rv_discovery_interval = tokio::time::interval(self.duration_to_next_rv_discovery_interval);
+            self.next_rv_discovery_interval.reset();
         }
 
         // Poll the stream that fires when we need to start a random Kademlia query.
@@ -514,7 +522,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 if self.custom_seed_peers.iter().find(|peer| {peer.0 == peer_id.clone()}).is_some() {
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                         println!("Identified: rendezvous-server {:?}",peer_id.clone());
-                                        rv.discover(Some(self.rv_namespace.clone()), None, Some(10), peer_id.clone());
+                                        self.rv_discover_retries = 0;
                                         return Poll::Ready(ToSwarm::ListenOn { opts: ListenOpts::new(info.observed_addr.clone() ) }); 
                                     }
                                 }
@@ -569,6 +577,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                             rendezvous::client::Event::Discovered { rendezvous_node, registrations, cookie } => {
 
                                 self.rv_discover_retries = 0;
+                                
+                                self.rv_cookie = Some(cookie.clone());
 
                                 for registration in registrations {
                                     if registration.record.peer_id() == self.local_public_key.to_peer_id() {
@@ -590,24 +600,17 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                         println!("Rendezvous Discovered - {:?}, {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().clone());
                                     }
                                 }
-                                
-                                if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                    sleep(Duration::from_secs(10));
-                                    rv.discover(Some(self.rv_namespace.clone()), Some(cookie.clone()), Some(3200000), rendezvous_node.clone())
-                                }
                             },
                             rendezvous::client::Event::DiscoverFailed { rendezvous_node, namespace, error } => {
                                 
                                     println!("[!] Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
 
-                                    if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        // Max wait time after backoff is 1 min between retries
-                                        if self.rv_discover_retries < 6 { self.rv_discover_retries += 1; }
+                                    // Max wait time after backoff is 1 min between retries
+                                    if self.rv_discover_retries < 6 { self.rv_discover_retries += 1; }
 
-                                        self.next_rv_discover_check = tokio::time::interval(self.duration_to_next_rv_discover_check);
-                                        self.next_rv_discover_check.reset();
-                                        
-                                    }                         
+                                    self.next_rv_discover_check = tokio::time::interval(self.duration_to_next_rv_discover_check);
+                                    self.next_rv_discover_check.reset();
+                                    self.rv_cookie = None;
                             },
                             rendezvous::client::Event::Registered { rendezvous_node, ttl, namespace } => {
                                 println!("Rendezvous Registered - {:?}",rendezvous_node.clone());

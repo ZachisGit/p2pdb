@@ -418,11 +418,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             return Poll::Ready(ToSwarm::Dial { opts });
         }
 
-        // External Address event
-        if let Some(addr) = self.pending_add_external_address.pop_front() {
-            return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr.clone()));
-        }
-
         // Poll the stream that fires when we need to start a random Kademlia query.
         while self.next_kad_random_query.poll_tick(cx).is_ready() {
             if self.n_node_connected < self.target_peer_count {
@@ -532,12 +527,21 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     }
 
                                     if let Some(kad) = self.discovery.kademlia.as_mut() {
+                                        println!("Added address to KAD {:?} {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().unwrap().clone());
                                         kad.add_address(&registration.record.peer_id(),registration.record.addresses().first().unwrap().clone());
+                                        self.pending_dial_opts.push_back(
+                                            DialOpts::peer_id(registration.record.peer_id().clone())
+                                                .condition(PeerCondition::Disconnected)
+                                                .addresses(vec![registration.record.addresses().first().unwrap().clone()])
+                                                .build(),
+                                        );
+
+                                        self.pending_events.push_back(DiscoveryEvent::Discovery(Box::new(Discovery)))
                                     }
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                         println!("Rendezvous Discovered - {:?}, {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().clone());
-                                        sleep(Duration::from_secs(32));
+                                        //sleep(Duration::from_secs(32));
                                         rv.discover(Some(registration.namespace.clone()), Some(cookie.clone()), Some(32), rendezvous_node.clone())
                                     }       
                                 }
@@ -548,7 +552,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                         sleep(Duration::from_secs(32));
-                                        
                                         rv.discover(Some(self.rv_namespace.clone()), None, None, rendezvous_node.clone())
                                     }                         
                             },
@@ -602,7 +605,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 }
                 ToSwarm::NewExternalAddrCandidate(addr) => {
                     println!("[NEA-Candidate] {:?}",addr.clone());
-
                     return Poll::Ready(ToSwarm::NewExternalAddrCandidate(addr))
                 }
                 ToSwarm::ExternalAddrConfirmed(addr) => {

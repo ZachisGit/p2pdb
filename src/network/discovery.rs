@@ -468,9 +468,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 // Check if identified node has rendezvous server
                                 // protocol enabled if so call discover and register
                                 if self.custom_seed_peers.iter().find(|peer| {peer.0 == peer_id.clone()}).is_some() {
-                                    println!("Identified: rendezvous-server {:?}",peer_id.clone());
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        rv.discover(Some(self.rv_namespace.clone()), None, None, peer_id.clone());
+                                        println!("Identified: rendezvous-server {:?}",peer_id.clone());
+                                        rv.discover(Some(self.rv_namespace.clone()), None, Some(10), peer_id.clone());
                                         return Poll::Ready(ToSwarm::ListenOn { opts: ListenOpts::new(info.observed_addr.clone() ) }); 
                                     }
                                 }
@@ -539,6 +539,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                         println!("Added address to KAD {:?} {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().unwrap().clone());
                                         kad.add_address(&registration.record.peer_id(),registration.record.addresses().first().unwrap().clone());
                                         self.peers.insert(registration.record.peer_id().clone());
+
+                                        self.pending_dial_opts.push_back(
+                                            DialOpts::peer_id(registration.record.peer_id().clone())
+                                                .condition(PeerCondition::Disconnected)
+                                                .addresses(vec![registration.record.addresses().first().unwrap().clone()])
+                                                .build(),
+                                        );
 
                                         //self.pending_events.push_back(DiscoveryEvent::Discovery(Box::new(DerivedDiscoveryBehaviourEvent)))
                                     }

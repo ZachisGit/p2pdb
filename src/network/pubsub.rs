@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
 
 use futures::StreamExt;
-use libp2p::{self, gossipsub, identify, kad::store::MemoryStore, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, PeerId, Swarm};
+use libp2p::{self, autonat::NatStatus, gossipsub, identify, kad::store::MemoryStore, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, PeerId, Swarm};
 use tokio::time::{self, sleep};
 
 use crate::network::discovery;
@@ -75,9 +75,12 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     },
                     SwarmEvent::NewListenAddr { address,.. } => {
                         println!("New listen Address: {:?}",address.clone());
+                        if self.behaviour_mut().discovery.nat_status() == libp2p::autonat::NatStatus::Private {
+                            self.listen_on(address.clone()).unwrap();
+                        }
                     },
                     others => {
-                        println!("[E]: {:?};",others);
+                        //println!("[E]: {:?};",others);
                     }
                 }
             }

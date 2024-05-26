@@ -9,7 +9,7 @@ use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use ::futures::FutureExt;
 use libp2p::{
     autonat, core::Multiaddr, identify, identity::{Keypair, PeerId, PublicKey}, kad::{self, store::MemoryStore}, mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent}, multiaddr::Protocol, rendezvous::{self, client::RegisterError, Namespace}, swarm::{
-        behaviour::toggle::Toggle, derive_prelude::*, dial_opts::{DialOpts, PeerCondition}, NetworkBehaviour, SwarmEvent, ToSwarm
+        behaviour::toggle::Toggle, derive_prelude::*, dial_opts::{DialOpts, PeerCondition}, ListenOpts, NetworkBehaviour, SwarmEvent, ToSwarm
     }, upnp, Stream, StreamProtocol
 };
 use tokio::time::Interval;
@@ -463,6 +463,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     println!("Identified: rendezvous-server {:?}",peer_id.clone());
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                         rv.discover(Some(self.rv_namespace.clone()), None, None, peer_id.clone());
+                                        return Poll::Ready(ToSwarm::ListenOn { opts: ListenOpts::new(info.observed_addr.clone() ) }); 
                                     }
                                 }
                             }
@@ -535,13 +536,15 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                                 .addresses(vec![registration.record.addresses().first().unwrap().clone()])
                                                 .build(),
                                         );
+                                        
+                                        self.peers.insert(registration.record.peer_id().clone());
 
                                         //self.pending_events.push_back(DiscoveryEvent::Discovery(Box::new(DerivedDiscoveryBehaviourEvent)))
                                     }
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                         println!("Rendezvous Discovered - {:?}, {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().clone());
-                                        //sleep(Duration::from_secs(32));
+                                        sleep(Duration::from_secs(10));
                                         rv.discover(Some(registration.namespace.clone()), Some(cookie.clone()), Some(32), rendezvous_node.clone())
                                     }       
                                 }
@@ -599,7 +602,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                         connection,
                     })
                 }
-                ToSwarm::ListenOn { opts } => return Poll::Ready(ToSwarm::ListenOn { opts }),
+                ToSwarm::ListenOn { opts } => {println!("ListenOn: {:?}",opts); return Poll::Ready( ToSwarm::ListenOn { opts })},
                 ToSwarm::RemoveListener { id } => {
                     return Poll::Ready(ToSwarm::RemoveListener { id })
                 }

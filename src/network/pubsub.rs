@@ -82,8 +82,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                             false => { println!("Failed to start rendezvous."); }
                         }
                     },
-                    _ => {
-                        //println!("[E]: {:?};",others);
+                    others => {
+                        println!("[E]: {:?};",others);
                     }
                 }
             }

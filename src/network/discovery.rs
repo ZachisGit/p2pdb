@@ -467,7 +467,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             self.next_rv_discover_check = tokio::time::interval(self.duration_to_next_rv_discover_check);
             self.next_rv_discover_check.reset();
             
-            println!("[Status] peer-count={:?};  discover-retries={:?};  register-retries={:?};",self.n_node_connected,self.rv_discover_retries,self.rv_register_retries);
+            println!("[Status] peer-count={:?};  discover-retries={:?};  register-retries={:?};",self.n_node_connected,self.rv_discover_retries,self.rv_registation_retries);
         }
 
         // Poll the stream that fires when we need to start a random Kademlia query.

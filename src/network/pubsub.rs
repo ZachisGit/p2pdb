@@ -54,7 +54,7 @@ pub trait Spinup {
 impl Spinup for Swarm<RendezvousGossipBehaviour> {
     async fn spinup(&mut self,namespace: String, keypair: libp2p::identity::Keypair, cluster_keypair: libp2p::identity::Keypair,rendezvous_address: Multiaddr) -> Result<(), Box<dyn Error>> {
         
-        let _ = self.listen_on(Multiaddr::from_str("/ip4/0.0.0.0/tcp/0").unwrap());
+        let _ = self.listen_on(Multiaddr::from_str("/ip4/46.223.161.43/tcp/0").unwrap());
         self.behaviour_mut().discovery.bootstrap().unwrap();
         let mut first_connect = false;
 
@@ -64,20 +64,21 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     SwarmEvent::ConnectionEstablished {peer_id, ..} => {
                         println!("Connection established with: {:?}", peer_id);
                     },
+                    SwarmEvent::ConnectionClosed { peer_id,..} => { println!("[DC] {:?}",peer_id.clone());},
                     SwarmEvent::NewExternalAddrCandidate { address } => {
                         println!("External address candidate: {:?}", address.clone());
                         if matches!(self.behaviour_mut().discovery.nat_status(), libp2p::autonat::NatStatus::Private |  libp2p::autonat::NatStatus::Unknown) {
-                            println!("NAT identifed, manualy starting listener on open NAT address {:?}",address.clone());
-                            
-                        //}
-                        //if !first_connect {
-                            println!("First");
-                            //first_connect=true;
-                            self.add_external_address(address.clone());
-                            let _ = self.listen_on(address.clone());
-                            match self.behaviour_mut().discovery.start_rendezvous() { 
-                                true => { println!("Rendezvous started. {:?}",address.clone()); },
-                                false => { println!("Failed to start rendezvous."); }
+                            if !first_connect {
+                                println!("NAT identifed, manualy starting listener on open NAT address {:?}",address.clone());
+                                first_connect = true;
+                                self.add_external_address(address.clone());
+                                let _ = self.listen_on(address.clone());
+
+                                self.behaviour_mut().discovery.start_rendezvous();
+                                /*match self.behaviour_mut().discovery.start_rendezvous() { 
+                                    true => { println!("Rendezvous started. {:?}",address.clone()); },
+                                    false => { println!("Failed to start rendezvous."); }
+                                }*/
                             }
                         }
                     },

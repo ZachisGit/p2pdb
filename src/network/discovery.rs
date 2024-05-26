@@ -294,6 +294,8 @@ impl DiscoveryBehaviour {
             return true;
         }
 
+        self.is_rendezvous_started = true;
+
         if let Some(rv) = self.discovery.rendezvous.as_mut() {
             match rv.register(self.rv_namespace.clone(), self.custom_seed_peers.first().unwrap().0.clone(), None) {
                 Ok(()) => { 
@@ -524,12 +526,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                         },
                         DerivedDiscoveryBehaviourEvent::Rendezvous(ev) => match ev {
                             rendezvous::client::Event::Discovered { rendezvous_node, registrations, cookie } => {
-                                if self.n_node_connected >= self.target_peer_count {
-                                    // Already over discovery max, don't add discovered peers.
-                                    // We could potentially buffer these addresses to be added later,
-                                    // but mdns is not an important use case and may be removed in future.
-                                    continue;
-                                }
+
+
+                                println!("[discover] count={:?}",self.n_node_connected);
 
                                 for registration in registrations {
                                     if registration.record.peer_id() == self.local_public_key.to_peer_id() {
@@ -548,22 +547,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                                 .build(),
                                         );
 
-                                    }
-
-                                    if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                         println!("Rendezvous Discovered - {:?}, {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().clone());
-                                        //sleep(Duration::from_secs(10));
-                                        rv.discover(Some(registration.namespace.clone()), Some(cookie.clone()), Some(32), rendezvous_node.clone())
-                                    }       
+                                    }
+                                }
+                                
+                                if let Some(rv) = self.discovery.rendezvous.as_mut() {
+                                    sleep(Duration::from_secs(10));
+                                    rv.discover(Some(self.rv_namespace.clone()), Some(cookie.clone()), Some(3200000), rendezvous_node.clone())
                                 }
                             },
                             rendezvous::client::Event::DiscoverFailed { rendezvous_node, namespace, error } => {
                                 
-                                    println!("Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
+                                    println!("[!] Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        //sleep(Duration::from_secs(32));
-                                        rv.discover(Some(self.rv_namespace.clone()), None, None, rendezvous_node.clone())
+                                        sleep(Duration::from_secs(10));
+                                        rv.discover(Some(self.rv_namespace.clone()), None, Some(32), rendezvous_node.clone())
                                     }                         
                             },
                             rendezvous::client::Event::Registered { rendezvous_node, ttl, namespace } => {

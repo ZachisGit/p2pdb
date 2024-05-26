@@ -74,8 +74,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         }
                     },
                     SwarmEvent::NewListenAddr { address,.. } => {
-                        println!("New listen Address: {:?}",address.clone());
                         if self.behaviour_mut().discovery.nat_status() == libp2p::autonat::NatStatus::Private {
+                            println!("New listen Address: {:?}",address.clone());
                             self.listen_on(address.clone()).unwrap();
                         }
                     },

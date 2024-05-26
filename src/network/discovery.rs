@@ -564,7 +564,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     println!("[!] Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        self.rv_discover_retries += 1;
+                                        // Max wait time after backoff is 1 min between retries
+                                        if self.rv_discover_retries < 6 { self.rv_discover_retries += 1; }
+
                                         println!("[discover] peer-count={:?};  con-retries={:?};",self.n_node_connected,self.rv_discover_retries);
                                         sleep(Duration::from_secs(10*self.rv_discover_retries));
                                         rv.discover(Some(self.rv_namespace.clone()), None, Some(32), rendezvous_node.clone())

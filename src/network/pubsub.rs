@@ -92,9 +92,11 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("Identify: client={};",peer_id);
                         
                         if first_connection {
-                            first_connection = false;
-                            self.behaviour_mut().kad.add_address(&peer_id, info.listen_addrs.first().unwrap().clone());
-                            self.behaviour_mut().kad.bootstrap().unwrap();
+                            if info.listen_addrs.len() > 0 {
+                                first_connection = false;
+                                self.behaviour_mut().kad.add_address(&peer_id, info.listen_addrs.first().unwrap().clone());
+                                self.behaviour_mut().kad.bootstrap().unwrap();
+                            }
                         }
                     },
                     others => {

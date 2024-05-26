@@ -39,10 +39,6 @@ pub fn setup_swarm(
         // according to the doc. It might be a bug in `libp2p`.
         // We should fix the bug or report with a minimal reproduction.
         kademlia.set_mode(Some(libp2p::kad::Mode::Server));
-        
-        if let Err(e) = kademlia.bootstrap() {
-            println!("Kademlia bootstrap failed: {:?}", e);
-        }
         kademlia
     };
 
@@ -81,6 +77,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
         let listener_address = format!("/ip4/0.0.0.0/tcp/53748").parse::<Multiaddr>().unwrap();
         let _ = self.listen_on(listener_address);
+        let mut first_connection = true;
 
 
         // Define a dict that maps a peer to its registration failure count
@@ -90,6 +87,15 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                 event = self.select_next_some() => match event {
                     SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } => {
                         println!("ConnectionEstablished: client={};",peer_id);
+                    },
+                    SwarmEvent::Behaviour(RendezvousGossipBehaviourEvent::Identify(identify::Event::Received { peer_id, info, .. })) => {
+                        println!("Identify: client={};",peer_id);
+                        
+                        if first_connection {
+                            first_connection = false;
+                            self.behaviour_mut().kad.add_address(&peer_id, info.listen_addrs.first().unwrap().clone());
+                            self.behaviour_mut().kad.bootstrap().unwrap();
+                        }
                     },
                     others => {
                         //println!("OTHERS: {:?};",others);

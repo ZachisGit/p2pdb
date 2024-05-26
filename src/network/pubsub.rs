@@ -75,8 +75,6 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                     },
                     SwarmEvent::NewListenAddr { address,.. } => {
                         println!("New listen Address: {:?}",address.clone());
-                        self.listen_on(address.clone()).unwrap();
-
                     },
                     others => {
                         println!("[E]: {:?};",others);

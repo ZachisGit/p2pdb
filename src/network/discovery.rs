@@ -547,7 +547,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                                 .build(),
                                         );
 
-                                        //self.pending_events.push_back(DiscoveryEvent::Discovery(Box::new(DerivedDiscoveryBehaviourEvent)))
                                     }
 
                                     if let Some(rv) = self.discovery.rendezvous.as_mut() {

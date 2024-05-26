@@ -1,10 +1,8 @@
 use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
 
 use futures::StreamExt;
-use libp2p::{self, gossipsub, identify, kad::store::MemoryStore, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, PeerId, Swarm};
-use tokio::time::{self, sleep};
+use libp2p::{self, upnp, gossipsub, identify, relay,rendezvous, swarm::{NetworkBehaviour, SwarmEvent}, Multiaddr, Swarm};
 
-use crate::network::discovery;
 
 
 fn message_id_fn(message: &gossipsub::Message) -> gossipsub::MessageId {
@@ -15,9 +13,39 @@ fn message_id_fn(message: &gossipsub::Message) -> gossipsub::MessageId {
 
 pub fn setup_swarm(
     node_keypair: libp2p::identity::Keypair,
-    rendezvous_nodes: Vec<Multiaddr>
 ) -> Result<Swarm<RendezvousGossipBehaviour>, Box<dyn Error>> {
-    
+
+  // Set a custom gossipsub configuration
+  let gossipsub_config = gossipsub::ConfigBuilder::default()
+    .heartbeat_interval(std::time::Duration::from_secs(10))
+    .validation_mode(gossipsub::ValidationMode::Strict)
+    .message_id_fn(message_id_fn)
+    .build()
+    .expect("Valid config");
+
+
+    let store = libp2p::kad::store::MemoryStore::new(node_keypair.public().to_peer_id().clone());
+        let kad_config = {
+            let mut cfg = libp2p::kad::Config::default();
+            cfg.set_protocol_names(vec![libp2p::StreamProtocol::try_from_owned(format!(
+                "/openp2p/openrendezvous/1.0.0"
+            ))?]);
+            cfg
+        };
+    let kademlia_opt = {
+        let mut kademlia = libp2p::kad::Behaviour::with_config(node_keypair.public().to_peer_id().clone(), store, kad_config);
+        // `set_mode(Server)` fixes https://github.com/ChainSafe/forest/issues/3620
+        // but it should not be required as the behaviour should automatically switch to server mode
+        // according to the doc. It might be a bug in `libp2p`.
+        // We should fix the bug or report with a minimal reproduction.
+        kademlia.set_mode(Some(libp2p::kad::Mode::Server));
+        
+        if let Err(e) = kademlia.bootstrap() {
+            println!("Kademlia bootstrap failed: {:?}", e);
+        }
+        kademlia
+    };
+
     let swarm = libp2p::SwarmBuilder::with_existing_identity(node_keypair.clone())
         .with_tokio()
         .with_tcp(
@@ -26,60 +54,46 @@ pub fn setup_swarm(
             libp2p::yamux::Config::default,
         )?
         .with_behaviour(|key| RendezvousGossipBehaviour {
-            discovery: discovery::DiscoveryConfig::new(key.clone(), node_keypair.public(), "p2pdb-testnet")
-            .with_mdns(false)
-            .with_kademlia(true)
-            .with_rendezvous(true)
-            .with_user_defined(rendezvous_nodes.clone())
-            .unwrap()
-            .target_peer_count(128)
-            .finish()
-            .unwrap()
+            identify: libp2p::identify::Behaviour::new(libp2p::identify::Config::new(
+                "rendezvous-example/1.0.0".to_string(),
+                key.clone().public(),
+            )),
+            rendezvous_server: libp2p::rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
+            upnp: upnp::tokio::Behaviour::default(),
+            kad: kademlia_opt.into(),
         })?
         .with_swarm_config(|cfg| {
             cfg.with_idle_connection_timeout(std::time::Duration::from_secs(365 * 24 * 60 * 60))
         })
         .build();
-
     Ok(swarm)
 }
 
 
 // Define and implement a trait for Swarm<RendezvousGossipBehaviour>
 pub trait Spinup {
-    async fn spinup(&mut self, namespace: String, keypair: libp2p::identity::Keypair, cluster_keypair: libp2p::identity::Keypair, rendezvous_address: Multiaddr) -> Result<(), Box<dyn Error>>;
+    async fn spinup(&mut self, keypair: libp2p::identity::Keypair) -> Result<(), Box<dyn Error>>;
 }
 
 
 impl Spinup for Swarm<RendezvousGossipBehaviour> {
-    async fn spinup(&mut self,namespace: String, keypair: libp2p::identity::Keypair, cluster_keypair: libp2p::identity::Keypair,rendezvous_address: Multiaddr) -> Result<(), Box<dyn Error>> {
-        
-        self.behaviour_mut().discovery.bootstrap().unwrap();
-        let mut first_connect = false;
+    async fn spinup(&mut self,keypair: libp2p::identity::Keypair) -> Result<(), Box<dyn Error>> {
 
+        let listener_address = format!("/ip4/0.0.0.0/tcp/53748").parse::<Multiaddr>().unwrap();
+        let _ = self.listen_on(listener_address);
+
+
+        // Define a dict that maps a peer to its registration failure count
+        let mut registration_failures: HashMap<libp2p::PeerId,std::time::Instant> = std::collections::HashMap::new();
         loop {
             tokio::select! {
                 event = self.select_next_some() => match event {
-                    SwarmEvent::ConnectionEstablished {peer_id, ..} => {
-                        println!("Connection established with: {:?}", peer_id);
-                    },
-                    SwarmEvent::NewExternalAddrCandidate { address } => {
-                        if !first_connect {
-                            first_connect=true;
-                            self.add_external_address(address.clone());
-                            match self.behaviour_mut().discovery.start_rendezvous() { 
-                                true => { println!("Rendezvous started. {:?}",address.clone()); },
-                                false => { println!("Failed to start rendezvous."); }
-                            }
-                        }
-                    },
-                    SwarmEvent::NewListenAddr { address,.. } => {
-                        println!("New listen Address: {:?}",address.clone());
+                    SwarmEvent::ConnectionEstablished { peer_id, endpoint,.. } => {
+                        println!("ConnectionEstablished: client={};",peer_id);
                     },
                     others => {
-                        println!("[E]: {:?};",others);
-                    }
-                }
+                        //println!("OTHERS: {:?};",others);
+                    }                }
             }
         }
         Ok(())
@@ -89,5 +103,8 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
 #[derive(NetworkBehaviour)]
 pub struct RendezvousGossipBehaviour {
-    discovery: discovery::DiscoveryBehaviour,
+    identify: identify::Behaviour,
+    rendezvous_server: rendezvous::server::Behaviour,
+    upnp: upnp::tokio::Behaviour,
+    kad: libp2p::kad::Behaviour<libp2p::kad::store::MemoryStore>,
 }

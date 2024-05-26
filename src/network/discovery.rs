@@ -8,7 +8,7 @@ use std::{
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use ::futures::FutureExt;
 use libp2p::{
-    autonat, core::Multiaddr, identify, identity::{Keypair, PeerId, PublicKey}, kad::{self, store::MemoryStore}, mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent}, multiaddr::Protocol, rendezvous::{self, Namespace}, swarm::{
+    autonat, core::Multiaddr, identify, identity::{Keypair, PeerId, PublicKey}, kad::{self, store::MemoryStore}, mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent}, multiaddr::Protocol, rendezvous::{self, client::RegisterError, Namespace}, swarm::{
         behaviour::toggle::Toggle, derive_prelude::*, dial_opts::{DialOpts, PeerCondition}, NetworkBehaviour, SwarmEvent, ToSwarm
     }, upnp, Stream, StreamProtocol
 };
@@ -288,8 +288,14 @@ impl DiscoveryBehaviour {
         self.discovery.autonat.nat_status()
     }
 
-    pub fn add_external_address(&mut self,addr: &Multiaddr) {
-        self.pending_add_external_address.push_back(addr.clone());
+    pub fn start_rendezvous(&mut self,) -> bool{
+        if let Some(rv) = self.discovery.rendezvous.as_mut() {
+            match rv.register(self.rv_namespace.clone(), self.custom_seed_peers.first().unwrap().0.clone(), None) {
+                Ok(()) => return true,
+                Err(_e) => return false 
+            }
+        }
+        false
     }
     
 }
@@ -414,7 +420,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         // External Address event
         if let Some(addr) = self.pending_add_external_address.pop_front() {
-            return Poll::Ready(ToSwarm::NewExternalAddrCandidate { 0: addr });
+            return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr.clone()));
         }
 
         // Poll the stream that fires when we need to start a random Kademlia query.
@@ -422,10 +428,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             if self.n_node_connected < self.target_peer_count {
                 // We still have not hit the discovery max, send random request for peers.
                 let random_peer_id = PeerId::random();
-                println!(
+                /*println!(
                     "Libp2p <= Starting random Kademlia request for {:?}",
                     random_peer_id
-                );
+                );*/
                 if let Some(kademlia) = self.discovery.kademlia.as_mut() {
                     kademlia.get_closest_peers(random_peer_id);
                 }
@@ -455,8 +461,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                         kademlia.add_address(peer_id, address.clone());
                                     }
                                 }
-
-                                self.add_external_address(&info.observed_addr);
 
                                 // Check if identified node has rendezvous server
                                 // protocol enabled if so call discover and register
@@ -492,7 +496,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 // Intentionally ignore
                             }
                             other => {
-                                println!("Libp2p => Unhandled Kademlia event: {:?}", other)
+                                //println!("Libp2p => Unhandled Kademlia event: {:?}", other)
                             }
                         },
                         DerivedDiscoveryBehaviourEvent::Mdns(ev) => match ev {
@@ -597,13 +601,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     return Poll::Ready(ToSwarm::RemoveListener { id })
                 }
                 ToSwarm::NewExternalAddrCandidate(addr) => {
-                    println!("[NEAC] {:?}",addr.clone());
-                    if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                        rv.register(self.rv_namespace.clone(), self.custom_seed_peers.first().unwrap().0.clone(), None).unwrap_err();
-                    }
+                    println!("[NEA-Candidate] {:?}",addr.clone());
+
                     return Poll::Ready(ToSwarm::NewExternalAddrCandidate(addr))
                 }
                 ToSwarm::ExternalAddrConfirmed(addr) => {
+                    println!("[NEA] {:?}",addr.clone());
                     return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr))
                 }
                 ToSwarm::ExternalAddrExpired(addr) => {

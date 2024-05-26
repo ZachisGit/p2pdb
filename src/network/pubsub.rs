@@ -75,6 +75,13 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("Connection established with: {:?}", peer_id);
                         println!("NetStatus: {:?}",self.behaviour().discovery.nat_status());
                     },
+                    SwarmEvent::NewExternalAddrCandidate { address } => {
+                        self.add_external_address(address.clone());
+                        match self.behaviour_mut().discovery.start_rendezvous() { 
+                            true => { println!("Rendezvous started."); },
+                            false => { println!("Failed to start rendezvous."); }
+                        }
+                    },
                     _ => {
                         //println!("[E]: {:?};",others);
                     }

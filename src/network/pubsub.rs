@@ -1,7 +1,7 @@
-use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}};
+use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}, str::FromStr};
 
 use futures::StreamExt;
-use libp2p::{self, autonat::NatStatus, gossipsub, identify, kad::store::MemoryStore, relay, rendezvous, swarm::{dial_opts::PeerCondition, NetworkBehaviour, SwarmEvent}, upnp, Multiaddr, PeerId, Swarm};
+use libp2p::{self, autonat::NatStatus, gossipsub, identify, kad::store::MemoryStore, relay, rendezvous, swarm::{dial_opts::PeerCondition, ListenOpts, NetworkBehaviour, SwarmEvent, ToSwarm}, upnp, Multiaddr, PeerId, Swarm};
 use tokio::time::{self, sleep};
 
 use crate::network::discovery;
@@ -54,6 +54,7 @@ pub trait Spinup {
 impl Spinup for Swarm<RendezvousGossipBehaviour> {
     async fn spinup(&mut self,namespace: String, keypair: libp2p::identity::Keypair, cluster_keypair: libp2p::identity::Keypair,rendezvous_address: Multiaddr) -> Result<(), Box<dyn Error>> {
         
+        let _ = self.listen_on(Multiaddr::from_str("/ip4/0.0.0.0/tcp/0").unwrap());
         self.behaviour_mut().discovery.bootstrap().unwrap();
         let mut first_connect = false;
 
@@ -64,20 +65,28 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                         println!("Connection established with: {:?}", peer_id);
                     },
                     SwarmEvent::NewExternalAddrCandidate { address } => {
-                        if !first_connect {
-                            first_connect=true;
+                        println!("External address candidate: {:?}", address.clone());
+                        if matches!(self.behaviour_mut().discovery.nat_status(), libp2p::autonat::NatStatus::Private |  libp2p::autonat::NatStatus::Unknown) {
+                            println!("NAT identifed, manualy starting listener on open NAT address {:?}",address.clone());
+                            
+                        //}
+                        //if !first_connect {
+                            println!("First");
+                            //first_connect=true;
                             self.add_external_address(address.clone());
+                            let _ = self.listen_on(address.clone());
                             match self.behaviour_mut().discovery.start_rendezvous() { 
                                 true => { println!("Rendezvous started. {:?}",address.clone()); },
                                 false => { println!("Failed to start rendezvous."); }
                             }
                         }
                     },
+                    SwarmEvent::ExternalAddrConfirmed  { address } => {
+                        println!("New External address confirmed: {:?}",address.clone());
+                    },
                     SwarmEvent::NewListenAddr { address,.. } => {
-                        if self.behaviour_mut().discovery.nat_status() == libp2p::autonat::NatStatus::Private {
-                            println!("New listen Address: {:?}",address.clone());
-                            self.listen_on(address.clone()).unwrap();
-                        }
+                        println!("New listen Address: {:?}",address.clone());
+                        
                     },
                     others => {
                         //println!("[E]: {:?};",others);

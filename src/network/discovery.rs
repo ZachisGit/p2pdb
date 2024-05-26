@@ -289,7 +289,7 @@ impl DiscoveryBehaviour {
     }
 
     pub fn start_rendezvous(&mut self,) -> bool{
-        if !self.is_rendezvous_started {
+        if self.is_rendezvous_started {
             println!("RV Start event prevented");
             return true;
         }
@@ -297,10 +297,11 @@ impl DiscoveryBehaviour {
         if let Some(rv) = self.discovery.rendezvous.as_mut() {
             match rv.register(self.rv_namespace.clone(), self.custom_seed_peers.first().unwrap().0.clone(), None) {
                 Ok(()) => { 
+                    println!("RV Registered");
                     self.is_rendezvous_started = true;
                     return true
                 },
-                Err(_e) => return false 
+                Err(_e) => { println!("RV Registration Failed"); return false}
             }
         }
         false
@@ -616,6 +617,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 ToSwarm::NewExternalAddrCandidate(addr) => {
                     println!("[NEA-Candidate] {:?}",addr.clone());
 
+                    //return Poll::Ready(ToSwarm::ListenOn { opts: ListenOpts::new(addr.clone() ) })
                     return Poll::Ready(ToSwarm::NewExternalAddrCandidate(addr))
                 }
                 ToSwarm::ExternalAddrConfirmed(addr) => {

@@ -1,17 +1,10 @@
-use std::{collections::HashMap, error::Error, hash::{Hash,SipHasher}, str::FromStr};
+use std::{ error::Error, hash::{Hash,SipHasher}, str::FromStr};
 
 use futures::StreamExt;
-use libp2p::{self, autonat::NatStatus, gossipsub, identify, kad::store::MemoryStore, relay, rendezvous, swarm::{dial_opts::PeerCondition, ListenOpts, NetworkBehaviour, SwarmEvent, ToSwarm}, upnp, Multiaddr, PeerId, Swarm};
+use libp2p::{self, autonat::NatStatus, gossipsub, swarm::{NetworkBehaviour, SwarmEvent}, Multiaddr, Swarm};
 use tokio::time::{self, sleep};
 
 use crate::network::discovery;
-
-
-fn message_id_fn(message: &gossipsub::Message) -> gossipsub::MessageId {
-    let mut s = SipHasher::new();
-    message.data.hash(&mut s);
-    gossipsub::MessageId::from(std::hash::Hasher::finish(&s).to_string())
-}
 
 pub fn setup_swarm(
     node_keypair: libp2p::identity::Keypair,

@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0, MIT
 
 use std::{
-    borrow::BorrowMut, cmp, collections::VecDeque, task::{Context, Poll}, time::Duration
+    cmp, collections::VecDeque, task::{Context, Poll}, time::Duration
 };
 
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use ::futures::FutureExt;
 use libp2p::{
-    autonat, core::Multiaddr, identify, identity::{Keypair, PeerId, PublicKey}, kad::{self, store::MemoryStore}, mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent}, multiaddr::Protocol, rendezvous::{self, client::RegisterError, Namespace}, swarm::{
-        behaviour::toggle::Toggle, derive_prelude::*, dial_opts::{DialOpts, PeerCondition}, ListenOpts, NetworkBehaviour, SwarmEvent, ToSwarm
-    }, upnp, Stream, StreamProtocol
+    autonat, core::Multiaddr, identify, identity::{Keypair, PeerId, PublicKey}, kad::{self, store::MemoryStore}, mdns::{tokio::Behaviour as Mdns, Event as MdnsEvent}, multiaddr::Protocol, rendezvous, swarm::{
+        behaviour::toggle::Toggle, derive_prelude::*, dial_opts::{DialOpts, PeerCondition}, ListenOpts, NetworkBehaviour, ToSwarm
+    }, upnp, StreamProtocol
 };
 use tokio::time::Interval;
 
@@ -520,11 +520,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 // Check if identified node has rendezvous server
                                 // protocol enabled if so call discover and register
                                 if self.custom_seed_peers.iter().find(|peer| {peer.0 == peer_id.clone()}).is_some() {
-                                    if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                        println!("Identified: rendezvous-server {:?}",peer_id.clone());
-                                        self.rv_discover_retries = 0;
-                                        return Poll::Ready(ToSwarm::ListenOn { opts: ListenOpts::new(info.observed_addr.clone() ) }); 
-                                    }
+                                    println!("Identified: rendezvous-server {:?}",peer_id.clone());
+                                    self.rv_discover_retries = 0;
+                                    return Poll::Ready(ToSwarm::ListenOn { opts: ListenOpts::new(info.observed_addr.clone() ) });
                                 }
                             }
                         }
@@ -551,8 +549,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                             kad::Event::PendingRoutablePeer { .. } => {
                                 // Intentionally ignore
                             }
-                            other => {
-                                //println!("Libp2p => Unhandled Kademlia event: {:?}", other)
+                            _ => {
+                                //println!("Libp2p => Unhandled Kademlia event: {:?}", _)
                             }
                         },
                         DerivedDiscoveryBehaviourEvent::Mdns(ev) => match ev {
@@ -574,7 +572,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                             MdnsEvent::Expired(_) => {}
                         },
                         DerivedDiscoveryBehaviourEvent::Rendezvous(ev) => match ev {
-                            rendezvous::client::Event::Discovered { rendezvous_node, registrations, cookie } => {
+                            rendezvous::client::Event::Discovered { registrations, cookie, .. } => {
 
                                 self.rv_discover_retries = 0;
                                 
@@ -601,7 +599,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     }
                                 }
                             },
-                            rendezvous::client::Event::DiscoverFailed { rendezvous_node, namespace, error } => {
+                            rendezvous::client::Event::DiscoverFailed { rendezvous_node, .. } => {
                                 
                                     println!("[!] Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
 
@@ -612,11 +610,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     self.next_rv_discover_check.reset();
                                     self.rv_cookie = None;
                             },
-                            rendezvous::client::Event::Registered { rendezvous_node, ttl, namespace } => {
+                            rendezvous::client::Event::Registered { rendezvous_node, .. } => {
                                 println!("Rendezvous Registered - {:?}",rendezvous_node.clone());
                                 self.rv_registation_retries = 0;
                             },
-                            rendezvous::client::Event::RegisterFailed { rendezvous_node, namespace, error } => {
+                            rendezvous::client::Event::RegisterFailed { rendezvous_node, .. } => {
                                 if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                     println!("Rendezvous RegisterFailed - {:?}",rendezvous_node.clone());      
                                     
@@ -626,9 +624,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 }
                             },
                             rendezvous::client::Event::Expired { peer } => {
-                                if let Some(rv) = self.discovery.rendezvous.as_mut() {
-                                    println!("Rendezvous Expired - {:?}",peer.clone());
-                                    rv.register(self.rv_namespace.clone(), peer.clone(), None).unwrap();
+                                println!("Rendezvous Expired - {:?}",peer.clone());
+
+                                if peer.to_base58() == self.local_public_key.to_peer_id().to_base58() { 
+                                    println!("Re-registering to rendezvous...");
+                                    self.rv_registation_retries += 1;
                                 }
                             },
                         },

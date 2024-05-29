@@ -1,6 +1,31 @@
 // Copyright 2019-2024 ChainSafe Systems
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+// Identified => sent
+// Identified => received
+
+/*
+For listen and dial options
+
+    match opts.mode {
+        Mode::Dial => {
+            swarm
+                .dial(
+                    opts.relay_address
+                        .with(Protocol::P2pCircuit)
+                        .with(Protocol::P2p(opts.remote_peer_id.unwrap())),
+                )
+                .unwrap();
+        }
+        Mode::Listen => {
+            swarm
+                .listen_on(opts.relay_address.with(Protocol::P2pCircuit))
+                .unwrap();
+        }
+    }
+
+*/
+
 use std::{
     cmp, collections::VecDeque, task::{Context, Poll}, time::Duration
 };

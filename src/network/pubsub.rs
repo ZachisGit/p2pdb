@@ -47,9 +47,10 @@ pub fn setup_swarm(
         .with_tcp(
             libp2p::tcp::Config::new().port_reuse(true).nodelay(true),
             libp2p::noise::Config::new,
-            libp2p::yamux::Config::default,
+            libp2p::yamux::Config::default
         )?
         .with_behaviour(|key| RendezvousGossipBehaviour {
+            relay: relay::Behaviour::new(key.public().to_peer_id(), Default::default()),
             identify: libp2p::identify::Behaviour::new(libp2p::identify::Config::new(
                 "rendezvous-example/1.0.0".to_string(),
                 key.clone().public(),
@@ -111,6 +112,7 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
 
 #[derive(NetworkBehaviour)]
 pub struct RendezvousGossipBehaviour {
+    relay: relay::Behaviour,
     identify: identify::Behaviour,
     rendezvous_server: rendezvous::server::Behaviour,
     upnp: upnp::tokio::Behaviour,

@@ -99,9 +99,10 @@ impl Spinup for Swarm<RendezvousGossipBehaviour> {
                                 self.behaviour_mut().kad.bootstrap().unwrap();
                             }
                         }
+                        self.add_external_address(info.observed_addr.clone());
                     },
                     others => {
-                        //println!("OTHERS: {:?};",others);
+                        println!("OTHERS: {:?};",others);
                     }                }
             }
         }

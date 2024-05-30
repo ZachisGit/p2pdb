@@ -18,8 +18,9 @@ pub fn setup_swarm(
             libp2p::noise::Config::new,
             libp2p::yamux::Config::default,
         )?
-        .with_behaviour(|key| RendezvousGossipBehaviour {
-            discovery: discovery::DiscoveryConfig::new(key.clone(), node_keypair.public(), "p2pdb-testnet")
+        .with_relay_client(libp2p::noise::Config::new, libp2p::yamux::Config::default)?
+        .with_behaviour(|key,relay_behaviour| RendezvousGossipBehaviour {
+            discovery: discovery::DiscoveryConfig::new(key.clone(), node_keypair.public(), "p2pdb-testnet",relay_behaviour)
             .with_mdns(false)
             .with_kademlia(true)
             .with_rendezvous(true)

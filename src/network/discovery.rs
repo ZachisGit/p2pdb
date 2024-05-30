@@ -75,6 +75,12 @@ pub enum DiscoveryEvent {
     Discovery(Box<DerivedDiscoveryBehaviourEvent>),
 }
 
+pub struct NATPeer {
+    peer_id: PeerId,
+    relay_endpoint: Multiaddr,
+    status: String
+}
+
 /// `DiscoveryBehaviour` configuration.
 ///
 /// Note: In order to discover nodes or load and store values via Kademlia one
@@ -242,6 +248,7 @@ impl<'a> DiscoveryConfig<'a> {
             duration_to_next_rv_discovery_interval: Duration::from_secs(10),
             next_rv_discovery_interval: tokio::time::interval(Duration::from_secs(10)),
             rv_cookie: None,
+            nat_peers: vec! [],
         })
     }
 }
@@ -294,6 +301,9 @@ pub struct DiscoveryBehaviour {
     duration_to_next_rv_discovery_interval: Duration,
     next_rv_discovery_interval: Interval,
     rv_cookie: Option<rendezvous::Cookie>,
+
+    /// Dcutr Hole Punching for clients behind a NAT
+    nat_peers: Vec<NATPeer>,
 }
 
 #[derive(Default)]
@@ -471,9 +481,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         // Dial to peers
         if let Some(opts) = self.pending_dial_opts.pop_front() {
+            println!("Bro I am Dialing! {:?}",opts);
             return Poll::Ready(ToSwarm::Dial { opts });
         }
 
+        // Rendezvous - Register Failed
         while self.next_rv_register_check.poll_tick(cx).is_ready() {
             if self.rv_registation_retries > 0 {
                 self.rv_registation_retries = 0;
@@ -488,6 +500,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             self.next_rv_register_check.reset();
         }
 
+        // Rendezvous - Discover
         while self.next_rv_discover_check.poll_tick(cx).is_ready() {
             if self.rv_discover_retries > 0 {
                 if let Some(rv) = self.discovery.rendezvous.as_mut() {
@@ -500,6 +513,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             println!("[Status] peer-count={:?};  discover-retries={:?};  register-retries={:?};",self.n_node_connected,self.rv_discover_retries,self.rv_registation_retries);
         }
 
+        // Rendezvous - Discover Failed
         while self.next_rv_discovery_interval.poll_tick(cx).is_ready() {
             // Only if everything is fine and dandy
             if self.rv_discover_retries == 0 {                
@@ -512,7 +526,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             self.next_rv_discovery_interval.reset();
         }
 
-        // Poll the stream that fires when we need to start a random Kademlia query.
+        // Kademla
         while self.next_kad_random_query.poll_tick(cx).is_ready() {
             if self.n_node_connected < self.target_peer_count {
                 // We still have not hit the discovery max, send random request for peers.
@@ -540,7 +554,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         while let Poll::Ready(ev) = self.discovery.poll(cx) {
             match ev {
                 ToSwarm::GenerateEvent(ev) => {
+
                     match &ev {
+// IDENTIFY
                         DerivedDiscoveryBehaviourEvent::Identify(ev) => {
                             if let identify::Event::Received { peer_id, info } = ev {
                                 self.peer_info.entry(*peer_id).or_default().agent_version =
@@ -560,7 +576,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 }
                             }
                         }
+// AUTONAT
                         DerivedDiscoveryBehaviourEvent::Autonat(_) => {}
+// UPNP
                         DerivedDiscoveryBehaviourEvent::Upnp(ev) => match ev {
                             upnp::Event::NewExternalAddr(addr) => {
                                 println!("UPnP NewExternalAddr: {addr}");
@@ -575,6 +593,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 println!("UPnP NonRoutableGateway");
                             }
                         },
+// KADEMLIA
                         DerivedDiscoveryBehaviourEvent::Kademlia(ev) => match ev {
                             // Adding to Kademlia buckets is automatic with our config,
                             // no need to do manually.
@@ -587,6 +606,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 //println!("Libp2p => Unhandled Kademlia event: {:?}", _)
                             }
                         },
+// MDNS
                         DerivedDiscoveryBehaviourEvent::Mdns(ev) => match ev {
                             MdnsEvent::Discovered(list) => {
                                 if self.n_node_connected >= self.target_peer_count {
@@ -605,6 +625,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                             }
                             MdnsEvent::Expired(_) => {}
                         },
+// RENDEZVOUS
                         DerivedDiscoveryBehaviourEvent::Rendezvous(ev) => match ev {
                             rendezvous::client::Event::Discovered { registrations, cookie, .. } => {
 
@@ -617,27 +638,43 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                         continue;
                                     }
 
-                                    if let Some(kad) = self.discovery.kademlia.as_mut() {
-                                        println!("Added address to KAD {:?} {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().unwrap().clone());
-                                        kad.add_address(&registration.record.peer_id(),registration.record.addresses().first().unwrap().clone());
-                                        self.peers.insert(registration.record.peer_id().clone());
 
-                                        if self.nat_status() == autonat::NatStatus::Private {
-                                            //todo
+                                    if !self.nat_status().is_public() {
+                                        let circuit_address = self.custom_seed_peers.first().unwrap().1.clone()
+                                            .with(Protocol::P2pCircuit)
+                                            .with(Protocol::P2p(registration.record.peer_id())
+                                        );
+
+                                        println!("B: {:?}  -  {:?}",self.pending_dial_opts.len(),circuit_address.clone());
+                                        self.pending_dial_opts.push_back(
+                                        //DialOpts::peer_id("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn".parse::<PeerId>().unwrap())
+                                        DialOpts::peer_id(registration.record.peer_id().clone())
+                                            .condition(PeerCondition::Always)
+                                            .addresses(vec![circuit_address.clone()])
+                                            .build()
+                                        );
+                                    }
+                                    else {
+
+                                        if let Some(kad) = self.discovery.kademlia.as_mut() {
+                                            println!("Added address to KAD {:?} {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().unwrap().clone());
+                                            kad.add_address(&registration.record.peer_id(),registration.record.addresses().first().unwrap().clone());
+                                            self.peers.insert(registration.record.peer_id().clone());
                                         }
+
                                         self.pending_dial_opts.push_back(
                                             DialOpts::peer_id(registration.record.peer_id().clone())
                                                 .condition(PeerCondition::Disconnected)
                                                 .addresses(vec![registration.record.addresses().first().unwrap().clone()])
-                                                .build(),
-                                        );
-
-                                        println!("Rendezvous Discovered - {:?}, {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().clone());
+                                                .build()
+                                        );                                            
                                     }
+
+                                    println!("Rendezvous Discovered - {:?}, {:?}",registration.record.peer_id().clone(),registration.record.addresses().first().clone());
+                                    
                                 }
                             },
-                            rendezvous::client::Event::DiscoverFailed { rendezvous_node, .. } => {
-                                
+                            rendezvous::client::Event::DiscoverFailed { rendezvous_node, .. } => {                                
                                     println!("[!] Rendezvous DiscoverFailed - {:?}",rendezvous_node.clone());
 
                                     // Max wait time after backoff is 1 min between retries
@@ -652,13 +689,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 self.rv_registation_retries = 0;
                             },
                             rendezvous::client::Event::RegisterFailed { rendezvous_node, .. } => {
-                                if let Some(rv) = self.discovery.rendezvous.as_mut() {
                                     println!("Rendezvous RegisterFailed - {:?}",rendezvous_node.clone());      
                                     
                                     self.rv_registation_retries += 1;
                                     self.next_rv_register_check = tokio::time::interval(self.duration_to_next_rv_register_check);
                                     self.next_rv_register_check.reset();
-                                }
                             },
                             rendezvous::client::Event::Expired { peer } => {
                                 println!("Rendezvous Expired - {:?}",peer.clone());
@@ -669,6 +704,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 }
                             },
                         },
+// RELAY_CLIENT
                         DerivedDiscoveryBehaviourEvent::RelayClient(ev) => match &ev {
                             libp2p::relay::client::Event::InboundCircuitEstablished { src_peer_id, limit } => {
                                 println!("RelayClient InboundCircuitEstablished - {:?} {:?}",src_peer_id.clone(),limit.clone());
@@ -680,16 +716,19 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                 println!("RelayClient ReservationReqAccepted - {:?} {:?} {:?}",relay_peer_id.clone(),renewal.clone(),limit.clone());
                             }
                         }
+// DCUTR
                         DerivedDiscoveryBehaviourEvent::Dcutr(ev) => match &ev {
                             _ => {
                                 println!("[Dcutr] {:?}",ev);
                             }
                         },
                     }
+                    println!("Pushing: {:?}",ev);
                     self.pending_events
                         .push_back(DiscoveryEvent::Discovery(Box::new(ev)));
                 }
                 ToSwarm::Dial { opts } => {
+                    println!("DIAL     {:?}",opts);
                     return Poll::Ready(ToSwarm::Dial { opts });
                 }
                 ToSwarm::NotifyHandler {
@@ -712,24 +751,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                         connection,
                     })
                 }
-                ToSwarm::ListenOn { opts } => {println!("ListenOn: {:?}",opts); return Poll::Ready( ToSwarm::ListenOn { opts })},
+                ToSwarm::ListenOn { opts } => {
+                    return Poll::Ready( ToSwarm::ListenOn { opts })
+                },
                 ToSwarm::RemoveListener { id } => {
                     return Poll::Ready(ToSwarm::RemoveListener { id })
                 }
                 ToSwarm::NewExternalAddrCandidate(addr) => {
-                    println!("[NEA-Candidate] {:?}",addr.clone());
-
-                    //return Poll::Ready(ToSwarm::ListenOn { opts: ListenOpts::new(addr.clone() ) })
                     return Poll::Ready(ToSwarm::NewExternalAddrCandidate(addr))
                 }
                 ToSwarm::ExternalAddrConfirmed(addr) => {
-                    println!("[NEA] {:?}",addr.clone());
                     return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr))
                 }
                 ToSwarm::ExternalAddrExpired(addr) => {
                     return Poll::Ready(ToSwarm::ExternalAddrExpired(addr))
                 }
-                _ => {}
+                others => {println!("OT {:?}",others);}
             }
         }
 

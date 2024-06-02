@@ -176,7 +176,8 @@ impl<'a> DiscoveryConfig<'a> {
         let kad_config = {
             let mut cfg = kad::Config::default();
             cfg.set_protocol_names(vec![StreamProtocol::try_from_owned(format!(
-                "/openp2p/{network_name}/1.0.0"
+                //"/openp2p/{network_name}/1.0.0"
+                "/openp2p/openrendezvous/1.0.0"
             ))?]);
             cfg
         };
@@ -642,17 +643,25 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                                     if !self.nat_status().is_public() {
                                         let circuit_address = self.custom_seed_peers.first().unwrap().1.clone()
                                             .with(Protocol::P2pCircuit)
-                                            .with(Protocol::P2p(registration.record.peer_id())
+                                            .with(Protocol::P2p(registration.record.peer_id())                            
                                         );
 
+                                        if let Some(kad) = self.discovery.kademlia.as_mut() {
+                                            println!("Added address to KAD {:?} {:?}",registration.record.peer_id().clone(),circuit_address.clone());
+                                            kad.add_address(&registration.record.peer_id(),circuit_address.clone());
+                                            self.peers.insert(registration.record.peer_id().clone());
+                                        }
                                         println!("B: {:?}  -  {:?}",self.pending_dial_opts.len(),circuit_address.clone());
-                                        self.pending_dial_opts.push_back(
+                                        //self.pending_dial_opts.push_back(
                                         //DialOpts::peer_id("12D3KooWQNTeKVURvL5ZEtUaWCp7JhDaWkC6X9Js3CF2urNLHfBn".parse::<PeerId>().unwrap())
-                                        DialOpts::peer_id(registration.record.peer_id().clone())
-                                            .condition(PeerCondition::Always)
+                                        let opts = DialOpts::peer_id(registration.record.peer_id().clone())
+                                            .condition(PeerCondition::DisconnectedAndNotDialing)
                                             .addresses(vec![circuit_address.clone()])
-                                            .build()
-                                        );
+                                            .build();
+                                        
+                                        
+                                        
+                                        return Poll::Ready(ToSwarm::Dial { opts });
                                     }
                                     else {
 
@@ -726,10 +735,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     println!("Pushing: {:?}",ev);
                     self.pending_events
                         .push_back(DiscoveryEvent::Discovery(Box::new(ev)));
+                    
                 }
                 ToSwarm::Dial { opts } => {
                     println!("DIAL     {:?}",opts);
-                    return Poll::Ready(ToSwarm::Dial { opts });
+                    return Poll::Ready(ToSwarm::Dial {  opts });
                 }
                 ToSwarm::NotifyHandler {
                     peer_id,
